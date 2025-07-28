@@ -9,13 +9,20 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
+    "crypto-js": "^4.2.0",
     "firebase": "^11.8.1",
+    "jsencrypt": "^3.3.2",
+    "lucide-react": "^0.528.0",
     "next": "15.3.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "eslint": "9.32.0",
+    "eslint-config-next": "15.4.4",
     "tailwindcss": "^4"
   }
 }

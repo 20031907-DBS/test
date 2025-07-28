@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Auth Flow</title>
+</head>
+<body>
+    <h1>Test Authentication Flow</h1>
+    
+    <div id="status"></div>
+    
+    <h2>Register</h2>
+    <button onclick="testRegister()">Test Register</button>
+    
+    <h2>Login</h2>
+    <button onclick="testLogin()">Test Login</button>
+    
+    <h2>Check Auth</h2>
+    <button onclick="checkAuth()">Check Current User</button>
+
+    <script>
+        const baseUrl = 'http://localhost:5000';
+        
+        async function testRegister() {
+            const status = document.getElementById('status');
+            status.innerHTML = 'Testing registration...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'testpass123',
+                        username: 'testuser',
+                        display_name: 'Test User'
+                    })
+                });
+                
+                const data = await response.json();
+                status.innerHTML = `Registration: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                status.innerHTML = `Registration Error: ${error.message}`;
+            }
+        }
+        
+        async function testLogin() {
+            const status = document.getElementById('status');
+            status.innerHTML = 'Testing login...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'testpass123'
+                    })
+                });
+                
+                const data = await response.json();
+                status.innerHTML = `Login: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                status.innerHTML = `Login Error: ${error.message}`;
+            }
+        }
+        
+        async function checkAuth() {
+            const status = document.getElementById('status');
+            status.innerHTML = 'Checking auth...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/auth/me`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                status.innerHTML = `Auth Check: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                status.innerHTML = `Auth Check Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from models.user import User
 from extensions import db
 
@@ -8,8 +9,13 @@ class FirebaseAuthService:
         
     def verify_firebase_token(self, id_token):
         try:
+            # Mock authentication for demo purposes
+            # In production, use firebase_admin.auth.verify_id_token(id_token)
+            if not id_token:
+                raise ValueError("Token is required")
+                
             return {
-                'uid': 'mock_uid_' + id_token[:10],
+                'uid': 'mock_uid_' + str(hash(id_token))[-8:],
                 'email': 'user@example.com',
                 'name': 'Test User',
                 'picture': None
@@ -21,7 +27,7 @@ class FirebaseAuthService:
         user = User.query.filter_by(firebase_uid=firebase_user['uid']).first()
 
         if user:
-
+            # Update existing user
             user.name = firebase_user.get('name', user.name)
             user.profile_picture = firebase_user.get('picture', user.profile_picture)
             user.last_seen = datetime.now(timezone.utc)
@@ -44,5 +50,5 @@ class FirebaseAuthService:
             )
             db.session.add(user)
         
-            db.session.commit()
+        db.session.commit()
         return user

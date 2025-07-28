@@ -1,56 +1,86 @@
-from datetime import datetime
-import base64
+"""
+Key Management Service for RSA public key validation and management
+"""
+
+import re
+from typing import Optional
+
 
 class KeyManagementService:
+    """Service for managing RSA keys and validation"""
+    
     @staticmethod
-    def validate_public_key(public_key_b64: str) -> bool:
+    def validate_public_key(public_key: str) -> bool:
         """
-        Basic validation of public key format
-        Only checks if it's valid base64 and meets minimum size requirements
-        """
-        try:
-            # Try to decode base64
-            key_data = base64.b64decode(public_key_b64)
+        Validate RSA public key format (PEM format)
+        
+        Args:
+            public_key: The public key string to validate
             
-            # Check minimum size (typical RSA public key is at least 162 bytes)
-            if len(key_data) < 162:  # Minimum size for 1024-bit RSA public key
+        Returns:
+            bool: True if valid, False otherwise
+        """
+        if not public_key or not isinstance(public_key, str):
+            return False
+            
+        # Check for PEM format markers
+        if not public_key.strip().startswith('-----BEGIN PUBLIC KEY-----'):
+            return False
+            
+        if not public_key.strip().endswith('-----END PUBLIC KEY-----'):
+            return False
+            
+        # Basic structure validation
+        lines = public_key.strip().split('\n')
+        if len(lines) < 3:  # At minimum: header, content, footer
+            return False
+            
+        # Check that middle lines contain base64-like content
+        for line in lines[1:-1]:  # Skip header and footer
+            if line and not re.match(r'^[A-Za-z0-9+/=]+$', line):
                 return False
                 
-            return True
-        except Exception:
-            return False
-
+        return True
+    
     @staticmethod
-    def format_public_key_response(user_id: int, public_key_b64: str) -> dict:
-        """Format public key data for API response"""
-        return {
-            'user_id': user_id,
-            'public_key': public_key_b64
-        }
-
-    @staticmethod
-    def store_public_key(user_id: int, public_key_b64: str) -> dict:
+    def extract_key_info(public_key: str) -> Optional[dict]:
         """
-        Store user's public key
-        In real implementation this would interact with database
-        """
-        if not KeyManagementService.validate_public_key(public_key_b64):
-            raise ValueError("Invalid public key format")
+        Extract basic information from a public key
+        
+        Args:
+            public_key: The public key string
             
-        # Return format matches what would be stored in database
+        Returns:
+            dict: Key information or None if invalid
+        """
+        if not KeyManagementService.validate_public_key(public_key):
+            return None
+            
         return {
-            'user_id': user_id,
-            'public_key': public_key_b64,
-            'created_at': datetime.utcnow().isoformat(),
-            'key_version': 1
+            'format': 'PEM',
+            'type': 'RSA',
+            'size_estimate': len(public_key.replace('\n', '').replace(' ', ''))
         }
-
+    
     @staticmethod
-    def get_public_key(user_id: int) -> str:
+    def sanitize_public_key(public_key: str) -> Optional[str]:
         """
-        Retrieve user's public key
-        In real implementation this would fetch from database
+        Sanitize and normalize a public key
+        
+        Args:
+            public_key: The public key string to sanitize
+            
+        Returns:
+            str: Sanitized key or None if invalid
         """
-        # This is a placeholder. In real implementation, 
-        # this would fetch from database
-        raise NotImplementedError("Database integration required") 
+        if not public_key:
+            return None
+            
+        # Remove extra whitespace and normalize line endings
+        sanitized = public_key.strip().replace('\r\n', '\n').replace('\r', '\n')
+        
+        # Validate the sanitized key
+        if KeyManagementService.validate_public_key(sanitized):
+            return sanitized
+            
+        return None

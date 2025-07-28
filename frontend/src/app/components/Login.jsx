@@ -29,8 +29,9 @@ function Login() {
         // Get Firebase ID token
         const idToken = await result.user.getIdToken();
         
-        // Send token to backend
-        const response = await fetch('http://localhost:5000/api/auth/firebase', {
+        // Send token to backend (try different ports)
+        const backendUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'http://localhost:5000';
+        const response = await fetch(`${backendUrl}/api/auth/firebase`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

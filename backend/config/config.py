@@ -10,7 +10,9 @@ if not os.path.exists(instance_path):
 class Config:
   SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(instance_path, 'database.db')
   SQLALCHEMY_TRACK_MODIFICATIONS = False 
-  SESSION_COOKIE_SECURE = True
   SECRET_KEY = 'AviPushGarAdi@004'
-  SESSION_COOKIE_SAMESITE = 'None'
-  SESSION_COOKIE_SECURE = True
+  
+  # Session configuration - relaxed for local development
+  SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') == 'production'
+  SESSION_COOKIE_SAMESITE = 'Lax' if os.environ.get('FLASK_ENV') != 'production' else 'None'
+  SESSION_COOKIE_HTTPONLY = True
