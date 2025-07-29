@@ -152,7 +152,7 @@ class WebSocketService {
         room_id: roomId,
         content: sanitizedMessage,
         message_type: 'text',
-        id: Date.now() + Math.random(), // Temporary ID for tracking
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Unique ID for tracking
         timestamp: new Date().toISOString(),
         // Encryption fields
         encrypted_aes_key: encryptionData.encrypted_aes_key,

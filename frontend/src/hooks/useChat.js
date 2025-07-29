@@ -24,7 +24,7 @@ export const useChat = (userId, token) => {
             const decryptedContent = await encryptionManager.decryptMessage(messageData);
             
             const newMessage = {
-                id: messageData.id || Date.now(),
+                id: messageData.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 text: decryptedContent,
                 sender: messageData.sender_id === userId ? 'me' : 'other',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -35,7 +35,7 @@ export const useChat = (userId, token) => {
             console.error('Error handling message:', error);
             // Fallback to original content
             const newMessage = {
-                id: messageData.id || Date.now(),
+                id: messageData.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 text: messageData.content || '[Error decrypting message]',
                 sender: messageData.sender_id === userId ? 'me' : 'other',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

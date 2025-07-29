@@ -40,11 +40,21 @@ export default function ChatMain({
     }
   }, [selectedRoomId, isMobile]);
 
+  const [isSending, setIsSending] = useState(false);
+
   const handleSendMessage = async () => {
-    if (messageInput.trim()) {
-      const result = await sendMessage(messageInput);
-      if (result?.success || result?.queued) {
-        setMessageInput('');
+    if (messageInput.trim() && !isSending) {
+      setIsSending(true);
+      try {
+        const result = await sendMessage(messageInput);
+        if (result?.success || result?.queued) {
+          setMessageInput('');
+        }
+      } finally {
+        // Add a small delay to prevent double-sending
+        setTimeout(() => {
+          setIsSending(false);
+        }, 500);
       }
     }
   };
@@ -370,10 +380,10 @@ export default function ChatMain({
           
           <button
             onClick={handleSendMessage}
-            disabled={!messageInput.trim()}
+            disabled={!messageInput.trim() || isSending}
             className={clsx(
               "p-2 rounded-full transition-colors",
-              messageInput.trim() && isConnected
+              messageInput.trim() && isConnected && !isSending
                 ? "bg-blue-600 text-white hover:bg-blue-700"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             )}
