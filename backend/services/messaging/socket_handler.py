@@ -230,6 +230,7 @@ class SocketHandler:
                 # Encryption fields (optional)
                 encrypted_aes_key = data.get('encrypted_aes_key')
                 iv = data.get('iv')
+                signature = data.get('signature')
                 is_encrypted = data.get('is_encrypted', False)
                 
                 if not sender_id or not room_id or not content:
@@ -254,9 +255,20 @@ class SocketHandler:
                     content=content,
                     encrypted_aes_key=encrypted_aes_key,
                     iv=iv,
+                    signature=signature,
                     is_encrypted=is_encrypted,
                     message_type=message_type
                 )
+                
+                # Validate encrypted message fields
+                try:
+                    message.validate_encrypted_fields()
+                except ValueError as ve:
+                    emit('message_error', {
+                        'status': 'error',
+                        'message': f'Message validation failed: {str(ve)}'
+                    })
+                    return
                 
                 db.session.add(message)
                 db.session.commit()
