@@ -82,6 +82,40 @@ class CryptoService {
     }
 
     /**
+     * Sign data using RSA private key
+     */
+    static async signWithRSA(data, privateKey) {
+        try {
+            const crypt = new JSEncrypt();
+            crypt.setPrivateKey(privateKey);
+
+            const signature = crypt.sign(data, CryptoJS.SHA256, "sha256");
+            if (!signature) {
+                throw new Error('RSA signing failed');
+            }
+
+            return signature;
+        } catch (error) {
+            throw new Error(`Failed to sign with RSA: ${error.message}`);
+        }
+    }
+
+    /**
+     * Verify RSA signature using public key
+     */
+    static async verifyRSASignature(data, signature, publicKey) {
+        try {
+            const crypt = new JSEncrypt();
+            crypt.setPublicKey(publicKey);
+
+            const isValid = crypt.verify(data, signature, CryptoJS.SHA256);
+            return isValid;
+        } catch (error) {
+            throw new Error(`Failed to verify RSA signature: ${error.message}`);
+        }
+    }
+
+    /**
      * Generate AES key for message encryption
      */
     static async generateAESKey() {
@@ -95,21 +129,21 @@ class CryptoService {
     }
 
     /**
-     * Encrypt message using AES-CBC
+     * Encrypt message using AES-GCM
      */
     static async encryptWithAES(message, aesKeyHex) {
         try {
-            // Generate random IV for each message
-            const iv = CryptoJS.lib.WordArray.random(16); // 128-bit IV for CBC
+            // Generate random IV for each message (96-bit IV for GCM)
+            const iv = CryptoJS.lib.WordArray.random(12); // 96-bit IV for GCM
 
             // Convert hex key to WordArray
             const key = CryptoJS.enc.Hex.parse(aesKeyHex);
 
-            // Encrypt message
+            // Encrypt message using GCM mode
             const encrypted = CryptoJS.AES.encrypt(message, key, {
                 iv: iv,
-                mode: CryptoJS.mode.CBC,
-                padding: CryptoJS.pad.Pkcs7
+                mode: CryptoJS.mode.GCM,
+                padding: CryptoJS.pad.NoPadding
             });
 
             return {
@@ -122,7 +156,7 @@ class CryptoService {
     }
 
     /**
-     * Decrypt message using AES-CBC
+     * Decrypt message using AES-GCM
      */
     static async decryptWithAES(encryptedData, ivB64, aesKeyHex) {
         try {
@@ -130,11 +164,11 @@ class CryptoService {
             const key = CryptoJS.enc.Hex.parse(aesKeyHex);
             const iv = CryptoJS.enc.Base64.parse(ivB64);
 
-            // Decrypt message
+            // Decrypt message using GCM mode
             const decrypted = CryptoJS.AES.decrypt(encryptedData, key, {
                 iv: iv,
-                mode: CryptoJS.mode.CBC,
-                padding: CryptoJS.pad.Pkcs7
+                mode: CryptoJS.mode.GCM,
+                padding: CryptoJS.pad.NoPadding
             });
 
             const decryptedMessage = decrypted.toString(CryptoJS.enc.Utf8);
