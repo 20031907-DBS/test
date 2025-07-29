@@ -6,7 +6,7 @@ const UserList = ({ currentUser, onStartChat }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  console.log('UserList: Component rendered with currentUser:', currentUser?.uid);
+  // Removed excessive logging to prevent console spam
 
   const loadUsers = () => {
     console.log('UserList: loadUsers called');

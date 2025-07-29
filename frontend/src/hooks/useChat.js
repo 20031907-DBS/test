@@ -19,30 +19,41 @@ export const useChat = (userId, token) => {
 
     // Handle incoming messages
     const handleMessage = useCallback(async (messageData) => {
+        console.log('handleMessage: Processing message:', messageData);
+        
+        let messageText;
+        let isEncrypted = false;
+        
         try {
-            // Decrypt message if it's encrypted
-            const decryptedContent = await encryptionManager.decryptMessage(messageData);
-            
-            const newMessage = {
-                id: messageData.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                text: decryptedContent,
-                sender: messageData.sender_id === userId ? 'me' : 'other',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                isEncrypted: messageData.is_encrypted || false
-            };
-            setMessages(prev => [...prev, newMessage]);
+            // Try to decrypt message if it's encrypted
+            messageText = await encryptionManager.decryptMessage(messageData);
+            isEncrypted = messageData.is_encrypted || false;
+            console.log('handleMessage: Message decrypted successfully');
         } catch (error) {
-            console.error('Error handling message:', error);
+            console.error('Error decrypting message:', error);
             // Fallback to original content
-            const newMessage = {
-                id: messageData.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                text: messageData.content || '[Error decrypting message]',
-                sender: messageData.sender_id === userId ? 'me' : 'other',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                isEncrypted: false
-            };
-            setMessages(prev => [...prev, newMessage]);
+            messageText = messageData.content || '[Error decrypting message]';
+            isEncrypted = false;
         }
+        
+        const newMessage = {
+            id: messageData.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            text: messageText,
+            sender: messageData.sender_id === userId ? 'me' : 'other',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isEncrypted: isEncrypted
+        };
+        
+        console.log('handleMessage: Adding message to state:', newMessage);
+        setMessages(prev => {
+            // Check if message already exists to prevent duplicates
+            const exists = prev.find(msg => msg.id === newMessage.id);
+            if (exists) {
+                console.log('handleMessage: Message already exists, skipping:', newMessage.id);
+                return prev;
+            }
+            return [...prev, newMessage];
+        });
     }, [userId]);
 
     // Handle connection status
@@ -129,6 +140,16 @@ export const useChat = (userId, token) => {
             return;
         }
 
+        console.log('useChat: Setting up WebSocket callbacks');
+        
+        // Remove any existing callbacks first to prevent duplicates
+        websocketService.removeMessageCallback(handleMessage);
+        websocketService.removeConnectionCallback(handleConnectionStatus);
+        websocketService.removeRoomCallback(handleRoomStatus);
+        websocketService.removeErrorCallback(handleError);
+        websocketService.removeTypingCallback(handleTyping);
+        websocketService.removePresenceCallback(handlePresence);
+        
         // Register callbacks
         websocketService.onMessage(handleMessage);
         websocketService.onConnectionStatus(handleConnectionStatus);
@@ -142,6 +163,7 @@ export const useChat = (userId, token) => {
 
         // Cleanup
         return () => {
+            console.log('useChat: Cleaning up WebSocket callbacks');
             websocketService.removeMessageCallback(handleMessage);
             websocketService.removeConnectionCallback(handleConnectionStatus);
             websocketService.removeRoomCallback(handleRoomStatus);
@@ -149,7 +171,7 @@ export const useChat = (userId, token) => {
             websocketService.removeTypingCallback(handleTyping);
             websocketService.removePresenceCallback(handlePresence);
         };
-    }, [userId, token, handleMessage, handleConnectionStatus, handleRoomStatus, handleError, handleTyping, handlePresence]);
+    }, [userId, token]);
 
     // Start a chat with a specific user
     const startChatWithUser = async (targetUserId) => {

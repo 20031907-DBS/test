@@ -16,8 +16,7 @@ function ChatInterface({ roomId }) {
   const { measureAsync } = usePerformance('ChatInterface');
   const { isOnline } = useConnectionMonitor();
   
-  // Immediate debug logging
-  console.log('ChatInterface mounted with currentUser:', currentUser);
+  // Removed excessive logging to prevent infinite loops
 
   const [selectedRoomId, setSelectedRoomId] = useState(roomId || null);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -187,21 +186,17 @@ function ChatInterface({ roomId }) {
     handleRouteChange();
   }, [pathname, isMobile, selectedRoomId, activeChats]);
 
-  // Auto-debug logging for development
+  // Auto-debug logging for development (only when significant changes occur)
   useEffect(() => {
-    console.log('=== ChatInterface Debug Info ===');
-    console.log('Current User:', currentUser);
-    console.log('Is Connected:', isConnected);
-    console.log('Connection Error:', connectionError);
-    console.log('Online Users:', onlineUsers);
-    console.log('Selected Room ID:', selectedRoomId);
-    console.log('Active Chats:', activeChats);
-    console.log('Environment:', process.env.NODE_ENV);
-    if (getDebugInfo) {
-      console.log('WebSocket Debug Info:', getDebugInfo());
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== ChatInterface Debug Info ===');
+      console.log('Current User:', currentUser?.uid);
+      console.log('Is Connected:', isConnected);
+      console.log('Selected Room ID:', selectedRoomId);
+      console.log('Active Chats Count:', activeChats.length);
+      console.log('================================');
     }
-    console.log('================================');
-  }, [currentUser, isConnected, connectionError, onlineUsers, selectedRoomId, activeChats, getDebugInfo]);
+  }, [currentUser?.uid, isConnected, selectedRoomId]);
 
   // Debug function for development
   const handleDebug = () => {
