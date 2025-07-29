@@ -3,6 +3,7 @@ from models.room import Room
 from models.message import Message
 from extensions import db
 from typing import Dict, Set, List, Optional
+from services.presence.presence_manager import PresenceManager
 
 
 class RoomManager:
@@ -17,6 +18,8 @@ class RoomManager:
         self.room_users: Dict[str, Set[int]] = {}
         # Track which rooms each user is in: {user_id: {room_id1, room_id2, ...}}
         self.user_rooms: Dict[int, Set[str]] = {}
+        # Initialize presence manager
+        self.presence_manager = PresenceManager(socketio)
     
     def add_user_to_room(self, user_id: int, room_id: str) -> bool:
         """

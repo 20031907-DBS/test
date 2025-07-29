@@ -76,16 +76,28 @@ class WebSocketService {
    * Join a specific chat room
    */
   joinRoom(roomId) {
+    if (!roomId) {
+      console.error('Cannot join room: roomId is required');
+      return;
+    }
+
     if (this.socket && this.isConnected) {
       // Get user_id from auth data stored during connection
       const userId = this.socket.auth?.userId;
+      if (!userId) {
+        console.error('Cannot join room: userId not found in auth data');
+        this.pendingRoomJoin = roomId;
+        return;
+      }
+
+      console.log(`Joining room: ${roomId} with user: ${userId}`);
       this.socket.emit('join_room', {
         room_id: roomId,
         user_id: userId
       });
       this.pendingRoomJoin = roomId;
     } else {
-      console.error('Cannot join room: WebSocket not connected');
+      console.log(`WebSocket not connected, storing room ${roomId} for later join`);
       // Store the room to join once connected
       this.pendingRoomJoin = roomId;
     }
@@ -276,7 +288,7 @@ class WebSocketService {
       this.isReconnecting = false;
       this.reconnectAttempts = 0;
       this.connectionError = null;
-      
+
       // Clear any existing reconnect timer
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
@@ -287,8 +299,10 @@ class WebSocketService {
 
       // Auto-join pending room if any
       if (this.pendingRoomJoin) {
+        const roomToJoin = this.pendingRoomJoin;
+        this.pendingRoomJoin = null; // Clear it first to avoid loops
         setTimeout(() => {
-          this.joinRoom(this.pendingRoomJoin);
+          this.joinRoom(roomToJoin);
         }, 100);
       }
 
@@ -315,9 +329,20 @@ class WebSocketService {
       console.error('WebSocket connection error:', error);
       this.isConnected = false;
       this.connectionError = error.message || 'Connection failed';
-      this.notifyConnectionStatus(false, this.connectionError);
-      this.notifyError('Connection failed', 'connect_error', { error: error.message });
-      
+
+      // Provide more specific error messages
+      let userFriendlyError = 'Connection failed';
+      if (error.message?.includes('ECONNREFUSED')) {
+        userFriendlyError = 'Backend server is not running. Please start the backend server.';
+      } else if (error.message?.includes('timeout')) {
+        userFriendlyError = 'Connection timeout. Please check your network connection.';
+      } else if (error.message?.includes('unauthorized')) {
+        userFriendlyError = 'Authentication failed. Please log in again.';
+      }
+
+      this.notifyConnectionStatus(false, userFriendlyError);
+      this.notifyError(userFriendlyError, 'connect_error', { error: error.message });
+
       if (!this.isReconnecting) {
         this.isReconnecting = true;
         this.attemptReconnection();
@@ -416,6 +441,23 @@ class WebSocketService {
         }
       });
     });
+
+    // Online users list response
+    this.socket.on('online_users_list', (data) => {
+      console.log('WebSocketService: Received online users list:', data);
+      // This will be handled by components that listen for this event
+    });
+
+    // All users list response - Let components handle this directly
+    // Removed WebSocketService listener to avoid conflicts
+
+    // Direct message room created
+    this.socket.on('direct_message_created', (data) => {
+      console.log('Direct message room created:', data);
+      if (data.room_id) {
+        this.joinRoom(data.room_id);
+      }
+    });
   }
 
   /**
@@ -444,7 +486,7 @@ class WebSocketService {
     const delay = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 30000); // Exponential backoff, max 30s
 
     console.log(`Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
-    
+
     this.connectionError = `Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`;
     this.notifyConnectionStatus(false, this.connectionError);
 
@@ -478,6 +520,49 @@ class WebSocketService {
    */
   getConnectionStatus() {
     return this.isConnected;
+  }
+
+  /**
+   * Get detailed connection info for debugging
+   */
+  getConnectionInfo() {
+    return {
+      isConnected: this.isConnected,
+      isReconnecting: this.isReconnecting,
+      reconnectAttempts: this.reconnectAttempts,
+      currentRoom: this.currentRoom,
+      pendingRoomJoin: this.pendingRoomJoin,
+      connectionError: this.connectionError,
+      hasSocket: !!this.socket,
+      socketConnected: this.socket?.connected,
+      socketId: this.socket?.id,
+      auth: this.socket?.auth
+    };
+  }
+
+  /**
+   * Test connection to backend server
+   */
+  async testConnection() {
+    const serverUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || this.findAvailableServer();
+
+    try {
+      const response = await fetch(`${serverUrl}/health`, {
+        method: 'GET',
+        timeout: 5000
+      });
+      return {
+        success: response.ok,
+        status: response.status,
+        serverUrl
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        serverUrl
+      };
+    }
   }
 
   /**
@@ -613,12 +698,12 @@ class WebSocketService {
   handleTyping(roomId, isTyping) {
     if (isTyping) {
       this.startTyping(roomId);
-      
+
       // Clear existing timer
       if (this.typingTimer) {
         clearTimeout(this.typingTimer);
       }
-      
+
       // Set timer to stop typing after 3 seconds of inactivity
       this.typingTimer = setTimeout(() => {
         this.stopTyping(roomId);
@@ -644,7 +729,93 @@ class WebSocketService {
       });
     }
   }
+
+  /**
+   * Request list of online users
+   */
+  requestOnlineUsers() {
+    if (this.socket && this.isConnected) {
+      console.log('WebSocketService: Emitting get_online_users event');
+      this.socket.emit('get_online_users');
+    } else {
+      console.log('WebSocketService: Cannot request online users - socket not connected');
+    }
+  }
+
+  /**
+   * Request list of all users (online and offline)
+   */
+  requestAllUsers() {
+    if (this.socket && this.isConnected) {
+      console.log('WebSocketService: Emitting get_all_users event');
+      this.socket.emit('get_all_users');
+    } else {
+      console.log('WebSocketService: Cannot request all users - socket not connected');
+    }
+  }
+
+  /**
+   * Create or join a direct message room with another user
+   */
+  startDirectMessage(targetUserId) {
+    if (!this.socket || !this.isConnected) {
+      console.error('Cannot start direct message: WebSocket not connected');
+      return null;
+    }
+
+    const currentUserId = this.socket.auth?.userId;
+    if (!currentUserId) {
+      console.error('Cannot start direct message: current user ID not found');
+      return null;
+    }
+
+    // Generate consistent room ID for direct messages (simpler format for now)
+    const roomId = [currentUserId, targetUserId].sort().join('_');
+    
+    console.log('WebSocketService: Starting direct message', {
+      currentUserId,
+      targetUserId,
+      roomId
+    });
+    
+    // For now, just join the room directly instead of using start_direct_message
+    // This bypasses the backend room creation issue
+    this.joinRoom(roomId);
+
+    return roomId;
+  }
+
+  /**
+   * Test connection to backend server
+   */
+  async testConnection() {
+    const serverUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || this.findAvailableServer();
+    
+    try {
+      const response = await fetch(`${serverUrl}/health`, { 
+        method: 'GET',
+        timeout: 5000 
+      });
+      return {
+        success: response.ok,
+        status: response.status,
+        serverUrl
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        serverUrl
+      };
+    }
+  }
 }
 
 const websocketService = new WebSocketService();
+
+// Make it available globally for debugging
+if (typeof window !== 'undefined') {
+  window.websocketService = websocketService;
+}
+
 export default websocketService;

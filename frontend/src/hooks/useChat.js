@@ -4,8 +4,9 @@ import encryptionManager from '../services/encryptionManager';
 
 /**
  * chat project with end-to-end encryption
+ * Modified to support user-initiated chats instead of auto-joining rooms
  */
-export const useChat = (roomId, userId, token) => {
+export const useChat = (userId, token) => {
     const [messages, setMessages] = useState([]);
     const [isConnected, setIsConnected] = useState(false);
     const [currentRoom, setCurrentRoom] = useState(null);
@@ -79,16 +80,17 @@ export const useChat = (roomId, userId, token) => {
 
     // Handle typing indicators
     const handleTyping = useCallback((typingData) => {
-        if (typingData.room_id === roomId) {
-            setTypingUsers(prev => {
-                const filtered = prev.filter(user => user.user_id !== typingData.user_id);
-                if (typingData.is_typing) {
-                    return [...filtered, typingData];
-                }
-                return filtered;
-            });
-        }
-    }, [roomId]);
+        // Handle typing indicators for any room (we'll filter by room in the component)
+        setTypingUsers(prev => {
+            const filtered = prev.filter(user => 
+                user.user_id !== typingData.user_id || user.room_id !== typingData.room_id
+            );
+            if (typingData.is_typing) {
+                return [...filtered, typingData];
+            }
+            return filtered;
+        });
+    }, []);
 
     // Handle presence updates
     const handlePresence = useCallback((presenceData) => {
@@ -120,9 +122,12 @@ export const useChat = (roomId, userId, token) => {
         initEncryption();
     }, [userId, token]);
 
-    // Setup WebSocket connection
+    // Setup WebSocket connection (without auto-joining rooms)
     useEffect(() => {
-        if (!userId || !token || !roomId) return;
+        if (!userId || !token) {
+            console.log('Missing required parameters for WebSocket connection:', { userId: !!userId, token: !!token });
+            return;
+        }
 
         // Register callbacks
         websocketService.onMessage(handleMessage);
@@ -132,9 +137,8 @@ export const useChat = (roomId, userId, token) => {
         websocketService.onTyping(handleTyping);
         websocketService.onPresence(handlePresence);
 
-        // Connect and join room automatically
+        // Connect to WebSocket server (but don't join any rooms automatically)
         websocketService.connect(userId, token);
-        websocketService.joinRoom(roomId);
 
         // Cleanup
         return () => {
@@ -145,11 +149,32 @@ export const useChat = (roomId, userId, token) => {
             websocketService.removeTypingCallback(handleTyping);
             websocketService.removePresenceCallback(handlePresence);
         };
-    }, [userId, token, roomId, handleMessage, handleConnectionStatus, handleRoomStatus, handleError]);
+    }, [userId, token, handleMessage, handleConnectionStatus, handleRoomStatus, handleError, handleTyping, handlePresence]);
 
-    // Send message function
-    const sendMessage = async (messageContent) => {
-        if (!messageContent.trim()) return;
+    // Start a chat with a specific user
+    const startChatWithUser = async (targetUserId) => {
+        if (!targetUserId || !isConnected) {
+            console.error('Cannot start chat: missing targetUserId or not connected');
+            return null;
+        }
+
+        console.log('useChat: Starting chat with targetUserId:', targetUserId, 'currentUserId:', userId);
+
+        // Use the WebSocket service to start a direct message
+        const roomId = websocketService.startDirectMessage(targetUserId);
+        
+        if (roomId) {
+            console.log('useChat: Direct message room created:', roomId);
+            return roomId;
+        } else {
+            console.error('useChat: Failed to create direct message room');
+            return null;
+        }
+    };
+
+    // Send message function (requires roomId to be passed)
+    const sendMessage = async (roomId, messageContent) => {
+        if (!messageContent.trim() || !roomId) return;
 
         try {
             // Encrypt message if encryption is available
@@ -180,13 +205,31 @@ export const useChat = (roomId, userId, token) => {
         websocketService.retryConnection();
     };
 
-    // Typing functions
-    const startTyping = () => {
-        websocketService.handleTyping(roomId, true);
+    // Typing functions (requires roomId to be passed)
+    const startTyping = (roomId) => {
+        if (roomId) {
+            websocketService.handleTyping(roomId, true);
+        }
     };
 
-    const stopTyping = () => {
-        websocketService.handleTyping(roomId, false);
+    const stopTyping = (roomId) => {
+        if (roomId) {
+            websocketService.handleTyping(roomId, false);
+        }
+    };
+
+    // Debug function to check connection status
+    const getDebugInfo = () => {
+        return {
+            hookState: {
+                isConnected,
+                currentRoom,
+                connectionError,
+                lastError,
+                pendingMessagesCount
+            },
+            websocketInfo: websocketService.getConnectionInfo()
+        };
     };
 
     return {
@@ -194,6 +237,7 @@ export const useChat = (roomId, userId, token) => {
         isConnected,
         currentRoom,
         sendMessage,
+        startChatWithUser,
         connectionError,
         lastError,
         pendingMessagesCount,
@@ -202,7 +246,8 @@ export const useChat = (roomId, userId, token) => {
         typingUsers,
         onlineUsers,
         startTyping,
-        stopTyping
+        stopTyping,
+        getDebugInfo
     };
 };
 

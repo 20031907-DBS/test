@@ -6,6 +6,7 @@ import { useChat } from '../hooks/useChat';
 import { usePerformance, useConnectionMonitor } from '../hooks/usePerformance';
 import ChatSidebar from './ChatSidebar';
 import ChatMain from './ChatMain';
+import UserList from './UserList';
 import { clsx } from 'clsx';
 
 function ChatInterface({ roomId }) {
@@ -15,18 +16,56 @@ function ChatInterface({ roomId }) {
   const { measureAsync } = usePerformance('ChatInterface');
   const { isOnline } = useConnectionMonitor();
   
-  // Default room for this implementation
-  const defaultRoomId = roomId || 'general';
-  const [selectedRoomId, setSelectedRoomId] = useState(defaultRoomId);
+  // Immediate debug logging
+  console.log('ChatInterface mounted with currentUser:', currentUser);
+
+  const [selectedRoomId, setSelectedRoomId] = useState(roomId || null);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [activeChats, setActiveChats] = useState([]);
 
-  // Use WebSocket chat hook
-  const { 
-    messages, 
-    isConnected, 
-    currentRoom, 
+  // Update selectedRoomId when roomId prop changes
+  useEffect(() => {
+    if (roomId && roomId !== selectedRoomId) {
+      console.log('ChatInterface: Setting room from URL:', roomId);
+      setSelectedRoomId(roomId);
+      
+      // Try to determine the user from the room ID (format: user1_user2)
+      if (roomId.includes('_')) {
+        const userIds = roomId.split('_');
+        const otherUserId = userIds.find(id => id !== currentUser?.uid);
+        if (otherUserId) {
+          // Create a mock user object for now
+          const mockUser = {
+            id: parseInt(otherUserId),
+            username: `user${otherUserId}`,
+            name: `User ${otherUserId}`,
+            display_name: `User ${otherUserId}`,
+            email: `user${otherUserId}@example.com`
+          };
+          setSelectedUser(mockUser);
+          
+          // Add to active chats
+          setActiveChats(prev => {
+            const exists = prev.find(chat => chat.roomId === roomId);
+            if (!exists) {
+              return [...prev, { roomId, user: mockUser, lastActivity: new Date() }];
+            }
+            return prev;
+          });
+        }
+      }
+    }
+  }, [roomId, selectedRoomId, currentUser?.uid]);
+
+  // Use WebSocket chat hook only when we have authentication data
+  const {
+    messages,
+    isConnected,
+    currentRoom,
     sendMessage: sendWebSocketMessage,
+    startChatWithUser,
     connectionError,
     lastError,
     pendingMessagesCount,
@@ -35,12 +74,24 @@ function ChatInterface({ roomId }) {
     typingUsers,
     onlineUsers,
     startTyping,
-    stopTyping
+    stopTyping,
+    getDebugInfo
   } = useChat(
-    selectedRoomId,
     currentUser?.uid,
     currentUser?.accessToken
   );
+
+  // Show loading state if user data is not available
+  if (!currentUser?.uid || !currentUser?.accessToken) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading chat...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Handle responsive design
   useEffect(() => {
@@ -59,16 +110,40 @@ function ChatInterface({ roomId }) {
     return () => window.removeEventListener('resize', checkMobile);
   }, [roomId]);
 
-  // Handle room selection
-  const handleRoomSelect = (newRoomId) => {
-    setSelectedRoomId(newRoomId);
-    
-    // Update URL without page refresh
-    if (newRoomId === 'general') {
-      router.push('/chat', undefined, { shallow: true });
-    } else {
-      router.push(`/chat/${newRoomId}`, undefined, { shallow: true });
+  // Handle starting a chat with a user
+  const handleStartChat = async (user) => {
+    console.log('ChatInterface: Starting chat with user:', user);
+    const roomId = await startChatWithUser(user.id);
+    if (roomId) {
+      setSelectedRoomId(roomId);
+      setSelectedUser(user);
+
+      // Add to active chats if not already there
+      setActiveChats(prev => {
+        const exists = prev.find(chat => chat.roomId === roomId);
+        if (!exists) {
+          return [...prev, { roomId, user, lastActivity: new Date() }];
+        }
+        return prev;
+      });
+
+      // Update URL
+      router.push(`/chat/${roomId}`, undefined, { shallow: true });
+
+      // On mobile, hide sidebar when chat is selected
+      if (isMobile) {
+        setShowSidebar(false);
+      }
     }
+  };
+
+  // Handle selecting an existing chat
+  const handleChatSelect = (chat) => {
+    setSelectedRoomId(chat.roomId);
+    setSelectedUser(chat.user);
+
+    // Update URL
+    router.push(`/chat/${chat.roomId}`, undefined, { shallow: true });
 
     // On mobile, hide sidebar when chat is selected
     if (isMobile) {
@@ -88,7 +163,8 @@ function ChatInterface({ roomId }) {
   useEffect(() => {
     const handleRouteChange = () => {
       if (pathname === '/chat') {
-        setSelectedRoomId('general');
+        setSelectedRoomId(null);
+        setSelectedUser(null);
         if (isMobile) {
           setShowSidebar(true);
         }
@@ -96,6 +172,11 @@ function ChatInterface({ roomId }) {
         const roomFromUrl = pathname.split('/chat/')[1];
         if (roomFromUrl && roomFromUrl !== selectedRoomId) {
           setSelectedRoomId(roomFromUrl);
+          // Try to find the user from active chats
+          const chat = activeChats.find(c => c.roomId === roomFromUrl);
+          if (chat) {
+            setSelectedUser(chat.user);
+          }
           if (isMobile) {
             setShowSidebar(false);
           }
@@ -104,7 +185,32 @@ function ChatInterface({ roomId }) {
     };
 
     handleRouteChange();
-  }, [pathname, isMobile, selectedRoomId]);
+  }, [pathname, isMobile, selectedRoomId, activeChats]);
+
+  // Auto-debug logging for development
+  useEffect(() => {
+    console.log('=== ChatInterface Debug Info ===');
+    console.log('Current User:', currentUser);
+    console.log('Is Connected:', isConnected);
+    console.log('Connection Error:', connectionError);
+    console.log('Online Users:', onlineUsers);
+    console.log('Selected Room ID:', selectedRoomId);
+    console.log('Active Chats:', activeChats);
+    console.log('Environment:', process.env.NODE_ENV);
+    if (getDebugInfo) {
+      console.log('WebSocket Debug Info:', getDebugInfo());
+    }
+    console.log('================================');
+  }, [currentUser, isConnected, connectionError, onlineUsers, selectedRoomId, activeChats, getDebugInfo]);
+
+  // Debug function for development
+  const handleDebug = () => {
+    console.log('Debug Info:', getDebugInfo());
+    console.log('Current User:', currentUser);
+    console.log('Is Connected:', isConnected);
+    console.log('Connection Error:', connectionError);
+    console.log('Online Users:', onlineUsers);
+  };
 
   return (
     <div className="flex h-screen bg-white">
@@ -117,12 +223,87 @@ function ChatInterface({ roomId }) {
           "w-0 overflow-hidden": !showSidebar,
         }
       )}>
-        <ChatSidebar 
-          selectedRoomId={selectedRoomId}
-          onRoomSelect={handleRoomSelect}
-          currentUser={currentUser}
-          isMobile={isMobile}
-        />
+        <div className="h-full flex flex-col">
+          {/* Header with user info and logout */}
+          <div className="border-b border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                  {(currentUser?.displayName || currentUser?.username || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {currentUser?.displayName || currentUser?.username}
+                  </p>
+                  <p className="text-xs text-gray-500">Online</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    // Call logout API
+                    await fetch('http://localhost:5000/api/auth/logout', {
+                      method: 'POST',
+                      credentials: 'include'
+                    });
+                    // Redirect to login
+                    window.location.href = '/login';
+                  } catch (error) {
+                    console.error('Logout error:', error);
+                    // Force redirect anyway
+                    window.location.href = '/login';
+                  }
+                }}
+                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+
+          {/* Active Chats Section */}
+          {activeChats.length > 0 && (
+            <div className="border-b border-gray-200">
+              <div className="p-4">
+                <h3 className="text-lg font-semibold mb-3 text-gray-800">Active Chats</h3>
+                <div className="space-y-2">
+                  {activeChats.map(chat => (
+                    <div
+                      key={chat.roomId}
+                      onClick={() => handleChatSelect(chat)}
+                      className={clsx(
+                        "flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors",
+                        {
+                          "bg-blue-100 border border-blue-200": selectedRoomId === chat.roomId,
+                          "hover:bg-gray-100": selectedRoomId !== chat.roomId,
+                        }
+                      )}
+                    >
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                        {(chat.user.display_name || chat.user.name || chat.user.username || chat.user.email || 'U').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {chat.user.display_name || chat.user.name || chat.user.username || chat.user.email}
+                        </p>
+                        <p className="text-xs text-gray-500">Active chat</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Online Users Section */}
+          <div className="flex-1 overflow-y-auto">
+            <UserList
+              currentUser={currentUser}
+              onStartChat={handleStartChat}
+              onlineUsers={onlineUsers}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Main Chat Area */}
@@ -132,25 +313,47 @@ function ChatInterface({ roomId }) {
           "hidden": isMobile && showSidebar,
         }
       )}>
-        <ChatMain
-          messages={messages}
-          isConnected={isConnected}
-          currentRoom={currentRoom}
-          selectedRoomId={selectedRoomId}
-          sendMessage={sendWebSocketMessage}
-          connectionError={connectionError}
-          lastError={lastError}
-          pendingMessagesCount={pendingMessagesCount}
-          retryConnection={retryConnection}
-          encryptionStatus={encryptionStatus}
-          currentUser={currentUser}
-          isMobile={isMobile}
-          onBackToList={handleBackToList}
-          typingUsers={typingUsers}
-          onlineUsers={onlineUsers}
-          startTyping={startTyping}
-          stopTyping={stopTyping}
-        />
+        {selectedRoomId && selectedUser ? (
+          <ChatMain
+            messages={messages}
+            isConnected={isConnected}
+            currentRoom={currentRoom}
+            selectedRoomId={selectedRoomId}
+            selectedUser={selectedUser}
+            sendMessage={(message) => sendWebSocketMessage(selectedRoomId, message)}
+            connectionError={connectionError}
+            lastError={lastError}
+            pendingMessagesCount={pendingMessagesCount}
+            retryConnection={retryConnection}
+            encryptionStatus={encryptionStatus}
+            currentUser={currentUser}
+            isMobile={isMobile}
+            onBackToList={handleBackToList}
+            typingUsers={typingUsers.filter(user => user.room_id === selectedRoomId)}
+            onlineUsers={onlineUsers}
+            startTyping={() => startTyping(selectedRoomId)}
+            stopTyping={() => stopTyping(selectedRoomId)}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Welcome to Chat</h3>
+              <p className="text-gray-600 mb-4">Select a user from the sidebar to start chatting</p>
+              {!isConnected && (
+                <div className="text-sm text-red-600">
+                  {connectionError || 'Connecting to chat server...'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+
       </div>
     </div>
   );
