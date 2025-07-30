@@ -1,13 +1,15 @@
 "use client"
 import React, { useState, useEffect } from 'react';
-import { Search, MessageCircle, Settings, LogOut, User, MoreVertical } from 'lucide-react';
+import { Search, MessageCircle, Settings, LogOut, User, MoreVertical, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { clsx } from 'clsx';
+import EncryptionSettings from './EncryptionSettings';
 
 export default function ChatSidebar({ selectedRoomId, onRoomSelect, currentUser, isMobile }) {
   const { logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showEncryptionSettings, setShowEncryptionSettings] = useState(false);
   
   // Mock conversations - in a real app, this would come from an API
   const [conversations] = useState([
@@ -120,6 +122,16 @@ export default function ChatSidebar({ selectedRoomId, onRoomSelect, currentUser,
                     <User className="w-4 h-4 mr-3" />
                     Profile
                   </button>
+                  <button 
+                    onClick={() => {
+                      setShowEncryptionSettings(true);
+                      setShowUserMenu(false);
+                    }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <Shield className="w-4 h-4 mr-3" />
+                    Encryption Settings
+                  </button>
                   <button className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <Settings className="w-4 h-4 mr-3" />
                     Settings
@@ -223,6 +235,12 @@ export default function ChatSidebar({ selectedRoomId, onRoomSelect, currentUser,
           <span>{filteredConversations.length} chats</span>
         </div>
       </div>
+
+      {/* Encryption Settings Modal */}
+      <EncryptionSettings 
+        isOpen={showEncryptionSettings}
+        onClose={() => setShowEncryptionSettings(false)}
+      />
     </div>
   );
 }

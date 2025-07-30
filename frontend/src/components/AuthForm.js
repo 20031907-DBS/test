@@ -97,7 +97,7 @@ export default function AuthForm({ onSuccess }) {
           accessToken: 'local-auth-token'
         };
         
-        // Call success callback immediately
+        // Call success callback with user data
         onSuccess(user);
         
       } else {
