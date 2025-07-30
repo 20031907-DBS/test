@@ -167,3 +167,135 @@ export const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => 
   
   throw lastError;
 };
+
+// Encryption-specific error handling
+export const EncryptionErrorCodes = {
+  KEY_GENERATION_FAILED: 'ENCRYPTION_KEY_GENERATION_FAILED',
+  ENCRYPTION_FAILED: 'ENCRYPTION_FAILED',
+  DECRYPTION_FAILED: 'DECRYPTION_FAILED',
+  KEY_EXCHANGE_FAILED: 'ENCRYPTION_KEY_EXCHANGE_FAILED',
+  SIGNATURE_VERIFICATION_FAILED: 'ENCRYPTION_SIGNATURE_VERIFICATION_FAILED',
+  STORAGE_FAILED: 'ENCRYPTION_STORAGE_FAILED',
+  INITIALIZATION_FAILED: 'ENCRYPTION_INITIALIZATION_FAILED'
+};
+
+export const isEncryptionError = (error) => {
+  return (
+    error.code?.startsWith('ENCRYPTION_') ||
+    error.type?.includes('encryption') ||
+    error.type?.includes('crypto') ||
+    error.message?.toLowerCase().includes('encryption') ||
+    error.message?.toLowerCase().includes('decrypt') ||
+    error.message?.toLowerCase().includes('crypto')
+  );
+};
+
+export const getEncryptionErrorMessage = (error) => {
+  if (error.userFriendlyMessage) {
+    return error.userFriendlyMessage;
+  }
+
+  // Map technical errors to user-friendly messages
+  const errorMessage = error.message?.toLowerCase() || '';
+  
+  if (errorMessage.includes('key generation')) {
+    return 'Failed to generate encryption keys. Please try again.';
+  }
+  
+  if (errorMessage.includes('encrypt') && !errorMessage.includes('decrypt')) {
+    return 'Failed to encrypt message. Please check your connection and try again.';
+  }
+  
+  if (errorMessage.includes('decrypt')) {
+    return 'Unable to decrypt this message. It may be corrupted or sent with incompatible encryption.';
+  }
+  
+  if (errorMessage.includes('signature')) {
+    return 'Message authenticity could not be verified. This message may not be from the claimed sender.';
+  }
+  
+  if (errorMessage.includes('key exchange') || errorMessage.includes('public key')) {
+    return 'Failed to exchange encryption keys. Please refresh and try again.';
+  }
+  
+  if (errorMessage.includes('storage') || errorMessage.includes('localstorage')) {
+    return 'Failed to store encryption keys securely. Please check your browser settings.';
+  }
+  
+  if (errorMessage.includes('initialization') || errorMessage.includes('setup')) {
+    return 'Failed to initialize encryption. Please refresh the page and try again.';
+  }
+  
+  return 'An encryption error occurred. Please try again.';
+};
+
+export const shouldRetryEncryptionError = (error, retryCount = 0, maxRetries = 3) => {
+  if (retryCount >= maxRetries) {
+    return false;
+  }
+
+  // Don't retry signature verification failures
+  if (error.type === 'signature_verification_failed' || 
+      error.message?.toLowerCase().includes('signature')) {
+    return false;
+  }
+
+  // Retry network-related encryption errors
+  if (isNetworkError(error) || error.message?.toLowerCase().includes('fetch')) {
+    return true;
+  }
+
+  // Retry key exchange failures
+  if (error.message?.toLowerCase().includes('key exchange') ||
+      error.message?.toLowerCase().includes('public key')) {
+    return true;
+  }
+
+  // Retry key generation failures (up to 3 times)
+  if (error.message?.toLowerCase().includes('key generation')) {
+    return retryCount < 3;
+  }
+
+  // Retry storage failures
+  if (error.message?.toLowerCase().includes('storage')) {
+    return retryCount < 2;
+  }
+
+  // Don't retry decryption failures (data might be corrupted)
+  if (error.message?.toLowerCase().includes('decrypt')) {
+    return false;
+  }
+
+  // Retry other encryption errors once
+  if (isEncryptionError(error)) {
+    return retryCount < 1;
+  }
+
+  return shouldRetry(error, retryCount, maxRetries);
+};
+
+export const retryEncryptionOperation = async (fn, maxRetries = 3, baseDelay = 1000) => {
+  let lastError;
+  
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      
+      if (i === maxRetries || !shouldRetryEncryptionError(error, i, maxRetries)) {
+        // Enhance error with user-friendly message
+        if (isEncryptionError(error) && !error.userFriendlyMessage) {
+          error.userFriendlyMessage = getEncryptionErrorMessage(error);
+        }
+        throw error;
+      }
+      
+      // Exponential backoff with jitter, but shorter delays for encryption operations
+      const delay = Math.min(baseDelay * Math.pow(1.5, i) + Math.random() * 500, 5000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+};

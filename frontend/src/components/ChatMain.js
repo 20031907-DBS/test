@@ -3,6 +3,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Phone, Video, MoreVertical, Send, Paperclip, Smile, Check, CheckCheck, Clock, AlertCircle, Wifi, WifiOff, MessageCircle, Lock, LockOpen, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import encryptionService from '../services/encryptionService';
+import EncryptionErrorDisplay, { EncryptionErrorBanner } from './EncryptionErrorDisplay';
+import useEncryptionErrors from '../hooks/useEncryptionErrors';
+import encryptionErrorManager from '../services/encryptionErrorManager';
 
 export default function ChatMain({
   messages,
@@ -32,6 +35,16 @@ export default function ChatMain({
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
+  // Enhanced encryption error management
+  const {
+    errors: encryptionErrors,
+    addError: addEncryptionError,
+    removeError: removeEncryptionError,
+    clearErrors: clearEncryptionErrors,
+    canRetry,
+    retryOperation
+  } = useEncryptionErrors();
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,12 +72,23 @@ export default function ChatMain({
         
         if (canEncrypt) {
           try {
-            // Encrypt the message for the recipient
-            messageData = await encryptionService.encryptMessage(messageInput.trim(), selectedUser.id.toString());
+            // Use encryption error manager for better error handling
+            messageData = await encryptionErrorManager.handleEncryptionOperation(
+              () => encryptionService.encryptMessage(messageInput.trim(), selectedUser.id.toString()),
+              'encryption',
+              { 
+                messageText: messageInput.trim(),
+                recipientId: selectedUser.id.toString(),
+                recipientName: selectedUser.display_name || selectedUser.name
+              }
+            );
             console.log('Message encrypted successfully');
           } catch (encryptError) {
             console.error('Encryption failed:', encryptError);
-            setEncryptionError(encryptError.userFriendlyMessage || 'Failed to encrypt message');
+            
+            // Add to error management system
+            const errorId = addEncryptionError(encryptError);
+            setEncryptionError(encryptError);
             
             // Don't send the message if encryption fails
             return;
@@ -78,10 +102,15 @@ export default function ChatMain({
         if (result?.success || result?.queued) {
           setMessageInput('');
           setEncryptionError(null);
+          clearEncryptionErrors(); // Clear any previous errors on success
         }
       } catch (error) {
         console.error('Failed to send message:', error);
-        setEncryptionError('Failed to send message');
+        setEncryptionError({
+          type: 'send_failed',
+          message: error.message,
+          userFriendlyMessage: 'Failed to send message. Please try again.'
+        });
       } finally {
         setIsEncrypting(false);
         // Add a small delay to prevent double-sending
@@ -89,6 +118,35 @@ export default function ChatMain({
           setIsSending(false);
         }, 500);
       }
+    }
+  };
+
+  // Handle encryption error retry
+  const handleEncryptionRetry = async (errorId) => {
+    const error = encryptionErrors.find(e => e.id === errorId);
+    if (!error) return false;
+
+    try {
+      if (error.type === 'encryption_failed') {
+        // Retry message encryption
+        return await retryOperation(errorId, async () => {
+          const messageData = await encryptionService.encryptMessage(
+            messageInput.trim(), 
+            selectedUser.id.toString()
+          );
+          return messageData;
+        });
+      } else if (error.type === 'initialization_failed') {
+        // Retry encryption initialization
+        return await retryOperation(errorId, async () => {
+          return await encryptionService.initialize(currentUser.id, currentUser.token);
+        });
+      }
+      
+      return false;
+    } catch (retryError) {
+      console.error('Encryption retry failed:', retryError);
+      return false;
     }
   };
 
@@ -310,6 +368,17 @@ export default function ChatMain({
           </div>
         </div>
       )}
+
+      {/* Encryption Error Banners */}
+      {encryptionErrors.map(error => (
+        <EncryptionErrorBanner
+          key={error.id}
+          error={error}
+          onRetry={canRetry(error.id) ? () => handleEncryptionRetry(error.id) : null}
+          onDismiss={() => removeEncryptionError(error.id)}
+          className="border-b"
+        />
+      ))}
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
@@ -549,15 +618,16 @@ export default function ChatMain({
         
         {/* Encryption Error Display */}
         {encryptionError && (
-          <div className="mb-3 flex items-center space-x-2 text-xs text-red-600 bg-red-50 p-2 rounded">
-            <AlertTriangle className="w-3 h-3" />
-            <span>{encryptionError}</span>
-            <button
-              onClick={() => setEncryptionError(null)}
-              className="ml-auto text-red-400 hover:text-red-600"
-            >
-              ×
-            </button>
+          <div className="mb-3">
+            <EncryptionErrorDisplay
+              error={encryptionError}
+              onRetry={encryptionError.type !== 'signature_verification_failed' ? () => {
+                setEncryptionError(null);
+                handleSendMessage();
+              } : null}
+              onDismiss={() => setEncryptionError(null)}
+              compact={true}
+            />
           </div>
         )}
         
