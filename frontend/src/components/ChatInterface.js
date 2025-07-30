@@ -7,6 +7,10 @@ import { usePerformance, useConnectionMonitor } from '../hooks/usePerformance';
 import ChatSidebar from './ChatSidebar';
 import ChatMain from './ChatMain';
 import UserList from './UserList';
+import EncryptionErrorBoundary from './EncryptionErrorBoundary';
+import EncryptionSettings from './EncryptionSettings';
+import { EncryptionStatusBadge } from './EncryptionStatusIndicator';
+import encryptionService from '../services/encryptionService';
 import { clsx } from 'clsx';
 
 function ChatInterface({ roomId }) {
@@ -23,6 +27,8 @@ function ChatInterface({ roomId }) {
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [activeChats, setActiveChats] = useState([]);
+  const [showEncryptionSettings, setShowEncryptionSettings] = useState(false);
+  const [encryptionFallbackMode, setEncryptionFallbackMode] = useState(false);
 
   // Update selectedRoomId when roomId prop changes
   useEffect(() => {
@@ -186,6 +192,21 @@ function ChatInterface({ roomId }) {
     }
   }, [currentUser?.uid, isConnected, selectedRoomId]);
 
+  // Handle encryption fallback mode
+  const handleEncryptionFallback = () => {
+    setEncryptionFallbackMode(true);
+  };
+
+  // Handle clearing encryption (for error recovery)
+  const handleClearEncryption = async () => {
+    try {
+      await encryptionService.clearEncryption();
+      setEncryptionFallbackMode(true);
+    } catch (error) {
+      console.error('Failed to clear encryption:', error);
+    }
+  };
+
   // Debug function for development
   const handleDebug = () => {
     console.log('Debug Info:', getDebugInfo());
@@ -193,6 +214,7 @@ function ChatInterface({ roomId }) {
     console.log('Is Connected:', isConnected);
     console.log('Connection Error:', connectionError);
     console.log('Online Users:', onlineUsers);
+    console.log('Encryption Status:', encryptionService.getEncryptionStatus());
   };
 
   // Show loading state if user data is not available
@@ -208,7 +230,33 @@ function ChatInterface({ roomId }) {
   }
 
   return (
-    <div className="flex h-screen bg-white">
+    <EncryptionErrorBoundary 
+      onFallbackMode={handleEncryptionFallback}
+      onClearEncryption={handleClearEncryption}
+    >
+      {/* Encryption Fallback Mode Banner */}
+      {encryptionFallbackMode && (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-yellow-800">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span className="text-sm font-medium">
+                Encryption disabled - messages are not encrypted
+              </span>
+            </div>
+            <button
+              onClick={() => setShowEncryptionSettings(true)}
+              className="text-sm text-yellow-700 hover:text-yellow-900 underline"
+            >
+              Settings
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex h-screen bg-white">
       {/* Sidebar */}
       <div className={clsx(
         "transition-all duration-300 ease-in-out bg-white border-r border-gray-200",
@@ -226,33 +274,53 @@ function ChatInterface({ roomId }) {
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
                   {(currentUser?.displayName || currentUser?.username || 'U').charAt(0).toUpperCase()}
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900">
                     {currentUser?.displayName || currentUser?.username}
                   </p>
-                  <p className="text-xs text-gray-500">Online</p>
+                  <div className="flex items-center space-x-2">
+                    <p className="text-xs text-gray-500">Online</p>
+                    <EncryptionStatusBadge 
+                      selectedUser={selectedUser}
+                      className="text-xs"
+                    />
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={async () => {
-                  try {
-                    // Call logout API
-                    await fetch('http://localhost:5000/api/auth/logout', {
-                      method: 'POST',
-                      credentials: 'include'
-                    });
-                    // Redirect to login
-                    window.location.href = '/login';
-                  } catch (error) {
-                    console.error('Logout error:', error);
-                    // Force redirect anyway
-                    window.location.href = '/login';
-                  }
-                }}
-                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
-              >
-                Logout
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowEncryptionSettings(true)}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+                  title="Encryption Settings"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      // Clear encryption before logout if enabled in preferences
+                      await encryptionService.clearEncryption();
+                      
+                      // Call logout API
+                      await fetch('http://localhost:5000/api/auth/logout', {
+                        method: 'POST',
+                        credentials: 'include'
+                      });
+                      // Redirect to login
+                      window.location.href = '/login';
+                    } catch (error) {
+                      console.error('Logout error:', error);
+                      // Force redirect anyway
+                      window.location.href = '/login';
+                    }
+                  }}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
 
@@ -348,9 +416,13 @@ function ChatInterface({ roomId }) {
           </div>
         )}
 
-
+        {/* Encryption Settings Modal */}
+        <EncryptionSettings
+          isOpen={showEncryptionSettings}
+          onClose={() => setShowEncryptionSettings(false)}
+        />
       </div>
-    </div>
+    </EncryptionErrorBoundary>
   );
 }
 

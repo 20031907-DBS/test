@@ -4,6 +4,7 @@ import { ArrowLeft, Phone, Video, MoreVertical, Send, Paperclip, Smile, Check, C
 import { clsx } from 'clsx';
 import encryptionService from '../services/encryptionService';
 import EncryptionErrorDisplay, { EncryptionErrorBanner } from './EncryptionErrorDisplay';
+import { EncryptionStatusPanel } from './EncryptionStatusIndicator';
 import useEncryptionErrors from '../hooks/useEncryptionErrors';
 import encryptionErrorManager from '../services/encryptionErrorManager';
 
@@ -584,37 +585,16 @@ export default function ChatMain({
 
       {/* Message Input */}
       <div className="border-t border-gray-200 bg-white p-4">
-        {/* Encryption Status Bar */}
-        {encryptionService.isEncryptionAvailable() && selectedUser && (
-          <div className="mb-3 flex items-center justify-between text-xs bg-green-50 border border-green-200 rounded px-3 py-2">
-            <div className="flex items-center space-x-2">
-              <Lock className="w-3 h-3 text-green-600" />
-              <span className="text-green-700 font-medium">End-to-end encryption enabled</span>
-            </div>
-            <div className="text-green-600">
-              Messages are encrypted for {selectedUser.display_name || selectedUser.name || selectedUser.username}
-            </div>
-          </div>
-        )}
-        
-        {!encryptionService.isEncryptionAvailable() && selectedUser && (
-          <div className="mb-3 flex items-center justify-between text-xs bg-yellow-50 border border-yellow-200 rounded px-3 py-2">
-            <div className="flex items-center space-x-2">
-              <LockOpen className="w-3 h-3 text-yellow-600" />
-              <span className="text-yellow-700 font-medium">Encryption not available</span>
-            </div>
-            <div className="text-yellow-600">
-              Messages will be sent unencrypted
-            </div>
-          </div>
-        )}
-        
-        {!selectedUser && (
-          <div className="mb-3 flex items-center space-x-2 text-xs bg-gray-50 border border-gray-200 rounded px-3 py-2">
-            <MessageCircle className="w-3 h-3 text-gray-500" />
-            <span className="text-gray-600">Select a user to enable encryption</span>
-          </div>
-        )}
+        {/* Enhanced Encryption Status Panel */}
+        <div className="mb-3">
+          <EncryptionStatusPanel
+            selectedUser={selectedUser}
+            onSettingsClick={() => {
+              // This could trigger a settings modal or callback to parent
+              console.log('Encryption settings clicked');
+            }}
+          />
+        </div>
         
         {/* Encryption Error Display */}
         {encryptionError && (
