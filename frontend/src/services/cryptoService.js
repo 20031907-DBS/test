@@ -1,4 +1,7 @@
-/** CryptoService - crypto-js wrapper for RSA and AES operationsImplements end-to-end encryption functionality for the chat application
+/**
+ * CryptoService - Web Crypto API and JSEncrypt wrapper for RSA and AES operations
+ * Implements end-to-end encryption functionality for the chat application
+ * Uses RSA-2048 for key exchange and AES-256-GCM for message encryption
  */
 
 import CryptoJS from 'crypto-js';
@@ -116,39 +119,68 @@ class CryptoService {
     }
 
     /**
-     * Generate AES key for message encryption
+     * Generate AES key for message encryption using Web Crypto API
      */
     static async generateAESKey() {
         try {
-            // Generate 256-bit (32 bytes) random key
-            const key = CryptoJS.lib.WordArray.random(32);
-            return key.toString(CryptoJS.enc.Hex);
+            // Generate 256-bit AES key using Web Crypto API
+            const key = await crypto.subtle.generateKey(
+                {
+                    name: 'AES-GCM',
+                    length: 256
+                },
+                true, // extractable
+                ['encrypt', 'decrypt']
+            );
+
+            // Export key as raw bytes and convert to hex
+            const keyBuffer = await crypto.subtle.exportKey('raw', key);
+            const keyArray = new Uint8Array(keyBuffer);
+            return Array.from(keyArray).map(b => b.toString(16).padStart(2, '0')).join('');
         } catch (error) {
             throw new Error(`Failed to generate AES key: ${error.message}`);
         }
     }
 
     /**
-     * Encrypt message using AES-GCM
+     * Encrypt message using AES-256-GCM with Web Crypto API
      */
     static async encryptWithAES(message, aesKeyHex) {
         try {
             // Generate random IV for each message (96-bit IV for GCM)
-            const iv = CryptoJS.lib.WordArray.random(12); // 96-bit IV for GCM
+            const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for GCM
 
-            // Convert hex key to WordArray
-            const key = CryptoJS.enc.Hex.parse(aesKeyHex);
+            // Convert hex key to Uint8Array
+            const keyBytes = new Uint8Array(aesKeyHex.match(/.{2}/g).map(byte => parseInt(byte, 16)));
 
-            // Encrypt message using GCM mode
-            const encrypted = CryptoJS.AES.encrypt(message, key, {
-                iv: iv,
-                mode: CryptoJS.mode.GCM,
-                padding: CryptoJS.pad.NoPadding
-            });
+            // Import the key
+            const key = await crypto.subtle.importKey(
+                'raw',
+                keyBytes,
+                { name: 'AES-GCM' },
+                false,
+                ['encrypt']
+            );
+
+            // Encrypt the message
+            const messageBytes = new TextEncoder().encode(message);
+            const encryptedBuffer = await crypto.subtle.encrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv
+                },
+                key,
+                messageBytes
+            );
+
+            // Convert to base64 for storage/transmission
+            const encryptedArray = new Uint8Array(encryptedBuffer);
+            const encryptedBase64 = btoa(String.fromCharCode(...encryptedArray));
+            const ivBase64 = btoa(String.fromCharCode(...iv));
 
             return {
-                encryptedData: encrypted.toString(),
-                iv: iv.toString(CryptoJS.enc.Base64)
+                encryptedData: encryptedBase64,
+                iv: ivBase64
             };
         } catch (error) {
             throw new Error(`Failed to encrypt with AES: ${error.message}`);
@@ -156,22 +188,42 @@ class CryptoService {
     }
 
     /**
-     * Decrypt message using AES-GCM
+     * Decrypt message using AES-256-GCM with Web Crypto API
      */
     static async decryptWithAES(encryptedData, ivB64, aesKeyHex) {
         try {
-            // Convert hex key and base64 IV to WordArray
-            const key = CryptoJS.enc.Hex.parse(aesKeyHex);
-            const iv = CryptoJS.enc.Base64.parse(ivB64);
+            // Convert base64 to Uint8Array
+            const encryptedBytes = new Uint8Array(
+                atob(encryptedData).split('').map(char => char.charCodeAt(0))
+            );
+            const iv = new Uint8Array(
+                atob(ivB64).split('').map(char => char.charCodeAt(0))
+            );
 
-            // Decrypt message using GCM mode
-            const decrypted = CryptoJS.AES.decrypt(encryptedData, key, {
-                iv: iv,
-                mode: CryptoJS.mode.GCM,
-                padding: CryptoJS.pad.NoPadding
-            });
+            // Convert hex key to Uint8Array
+            const keyBytes = new Uint8Array(aesKeyHex.match(/.{2}/g).map(byte => parseInt(byte, 16)));
 
-            const decryptedMessage = decrypted.toString(CryptoJS.enc.Utf8);
+            // Import the key
+            const key = await crypto.subtle.importKey(
+                'raw',
+                keyBytes,
+                { name: 'AES-GCM' },
+                false,
+                ['decrypt']
+            );
+
+            // Decrypt the message
+            const decryptedBuffer = await crypto.subtle.decrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv
+                },
+                key,
+                encryptedBytes
+            );
+
+            // Convert back to string
+            const decryptedMessage = new TextDecoder().decode(decryptedBuffer);
             if (!decryptedMessage) {
                 throw new Error('AES decryption failed - invalid key or corrupted data');
             }

@@ -422,6 +422,7 @@ function ChatInterface({ roomId }) {
           onClose={() => setShowEncryptionSettings(false)}
         />
       </div>
+      </div>
     </EncryptionErrorBoundary>
   );
 }
