@@ -252,15 +252,15 @@ export default function ChatMain({
 
   if (!selectedRoomId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="flex-1 flex items-center justify-center gradient-neutral">
         <div className="text-center">
-          <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-            <MessageCircle className="w-12 h-12 text-gray-400" />
+          <div className="w-32 h-32 gradient-primary rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-strong">
+            <MessageCircle className="w-16 h-16 text-white" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+          <h3 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-4">
             Welcome to Chat
           </h3>
-          <p className="text-gray-500">
+          <p className="text-lg text-gray-600">
             Select a conversation to start messaging
           </p>
         </div>
@@ -271,7 +271,7 @@ export default function ChatMain({
   return (
     <div className="flex-1 flex flex-col bg-white">
       {/* Chat Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+      <div className="flex items-center justify-between p-6 border-b border-gray-100 glass-morphism shadow-soft">
         <div className="flex items-center space-x-3">
           {isMobile && (
             <button
@@ -282,12 +282,12 @@ export default function ChatMain({
             </button>
           )}
           
-          <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-lg">
+          <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center text-xl shadow-soft">
             {getRoomAvatar()}
           </div>
           
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-gray-900 truncate">
+            <h2 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent truncate">
               {getRoomDisplayName()}
             </h2>
             <div className="flex items-center space-x-2 text-sm text-gray-500">
@@ -318,13 +318,13 @@ export default function ChatMain({
         </div>
 
         <div className="flex items-center space-x-2">
-          <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+          <button className="p-3 text-gray-500 hover:text-white hover:bg-gradient-to-r hover:from-green-400 hover:to-blue-500 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium hover:scale-105">
             <Phone className="w-5 h-5" />
           </button>
-          <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+          <button className="p-3 text-gray-500 hover:text-white hover:bg-gradient-to-r hover:from-purple-400 hover:to-pink-500 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium hover:scale-105">
             <Video className="w-5 h-5" />
           </button>
-          <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+          <button className="p-3 text-gray-500 hover:text-white hover:bg-gradient-to-r hover:from-gray-400 hover:to-gray-600 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium hover:scale-105">
             <MoreVertical className="w-5 h-5" />
           </button>
         </div>
@@ -332,11 +332,11 @@ export default function ChatMain({
 
       {/* Connection Status Banner */}
       {!isConnected && (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2">
+        <div className="gradient-warning border-b border-orange-200 px-6 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-yellow-600" />
-              <span className="text-sm text-yellow-800">
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-white" />
+              <span className="text-sm font-medium text-white">
                 {connectionError || 'Disconnected from chat'}
                 {pendingMessagesCount > 0 && (
                   <span className="ml-2">
@@ -347,7 +347,7 @@ export default function ChatMain({
             </div>
             <button
               onClick={retryConnection}
-              className="text-sm text-yellow-800 hover:text-yellow-900 underline"
+              className="text-sm text-white hover:text-gray-100 underline font-medium transition-colors duration-200"
             >
               Retry Connection
             </button>
@@ -357,10 +357,10 @@ export default function ChatMain({
 
       {/* Error Banner */}
       {lastError && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-2">
-          <div className="flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-red-600" />
-            <span className="text-sm text-red-800">
+        <div className="gradient-error border-b border-red-200 px-6 py-3">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-white" />
+            <span className="text-sm font-medium text-white">
               {lastError.message}
               {lastError.type === 'send_message' && lastError.details?.queued && (
                 <span className="ml-2">(Message queued for retry)</span>
@@ -382,22 +382,22 @@ export default function ChatMain({
       ))}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 gradient-neutral">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-20 h-20 gradient-primary rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-strong">
                 {getRoomAvatar()}
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-3">
                 {getRoomDisplayName()}
               </h3>
               {isConnected ? (
-                <p className="text-gray-500">
+                <p className="text-gray-600 text-lg">
                   No messages yet. Start the conversation!
                 </p>
               ) : (
-                <p className="text-gray-500">
+                <p className="text-gray-600 text-lg">
                   Connecting to chat...
                 </p>
               )}
@@ -417,10 +417,10 @@ export default function ChatMain({
                 )}
               >
                 <div className={clsx(
-                  "max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm",
+                  "max-w-xs lg:max-w-md px-5 py-3 rounded-2xl shadow-medium transition-all duration-300 hover:shadow-strong",
                   isOwn 
-                    ? "bg-blue-600 text-white" 
-                    : "bg-white text-gray-900 border border-gray-200"
+                    ? "gradient-primary text-white" 
+                    : "glass-morphism text-gray-900"
                 )}>
                   {showSender && (
                     <div className="text-xs font-medium mb-1 text-gray-600">
@@ -562,14 +562,14 @@ export default function ChatMain({
         {/* Typing Indicators */}
         {typingUsers.length > 0 && (
           <div className="flex justify-start mb-4">
-            <div className="max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-gray-200 text-gray-600">
-              <div className="flex items-center space-x-2">
+            <div className="max-w-xs lg:max-w-md px-5 py-3 rounded-2xl glass-morphism text-gray-600 shadow-soft">
+              <div className="flex items-center space-x-3">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 gradient-accent rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 gradient-accent rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 gradient-accent rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
-                <span className="text-sm">
+                <span className="text-sm font-medium">
                   {typingUsers.length === 1 
                     ? `${typingUsers[0].user_name} is typing...`
                     : `${typingUsers.length} people are typing...`
@@ -584,7 +584,7 @@ export default function ChatMain({
       </div>
 
       {/* Message Input */}
-      <div className="border-t border-gray-200 bg-white p-4">
+      <div className="border-t border-gray-100 glass-morphism p-6 shadow-strong">
         {/* Enhanced Encryption Status Panel */}
         <div className="mb-3">
           <EncryptionStatusPanel
@@ -611,8 +611,8 @@ export default function ChatMain({
           </div>
         )}
         
-        <div className="flex items-end space-x-3">
-          <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+        <div className="flex items-end space-x-4">
+          <button className="p-3 text-gray-500 hover:text-white hover:bg-gradient-to-r hover:from-purple-400 hover:to-pink-500 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium hover:scale-105">
             <Paperclip className="w-5 h-5" />
           </button>
           
@@ -625,14 +625,14 @@ export default function ChatMain({
               placeholder={isConnected ? "Type a message..." : "Connecting..."}
               disabled={!isConnected || isEncrypting}
               className={clsx(
-                "w-full px-4 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
+                "w-full px-5 py-3 border-2 border-transparent rounded-2xl resize-none focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-300 transition-all duration-300 shadow-soft",
                 {
                   "bg-gray-100 opacity-70": !isConnected || isEncrypting,
-                  "bg-white": isConnected && !isEncrypting
+                  "glass-morphism": isConnected && !isEncrypting
                 }
               )}
               rows={1}
-              style={{ minHeight: '40px', maxHeight: '120px' }}
+              style={{ minHeight: '48px', maxHeight: '120px' }}
             />
             
             {/* Encryption indicator in input */}
@@ -646,7 +646,7 @@ export default function ChatMain({
             )}
           </div>
           
-          <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+          <button className="p-3 text-gray-500 hover:text-white hover:bg-gradient-to-r hover:from-yellow-400 hover:to-orange-500 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium hover:scale-105">
             <Smile className="w-5 h-5" />
           </button>
           
@@ -654,9 +654,9 @@ export default function ChatMain({
             onClick={handleSendMessage}
             disabled={!messageInput.trim() || isSending || isEncrypting}
             className={clsx(
-              "p-2 rounded-full transition-colors relative",
+              "p-3 rounded-xl transition-all duration-300 relative shadow-soft hover:shadow-medium",
               messageInput.trim() && isConnected && !isSending && !isEncrypting
-                ? "bg-blue-600 text-white hover:bg-blue-700"
+                ? "gradient-accent text-white hover:scale-105"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             )}
             title={

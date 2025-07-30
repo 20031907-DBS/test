@@ -95,13 +95,13 @@ const UserList = ({ currentUser, onStartChat }) => {
 
   if (loading) {
     return (
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Users</h3>
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Users</h3>
           <div className="flex space-x-2">
             <button
               onClick={handleRefresh}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-2 text-gray-500 hover:text-white hover:bg-gradient-to-r hover:from-purple-500 hover:to-blue-500 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium"
               title="Refresh user list"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,7 +129,7 @@ const UserList = ({ currentUser, onStartChat }) => {
                   websocketService.socket.once('all_users_list', tempHandler);
                 }
               }}
-              className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="px-3 py-1 text-xs text-white gradient-accent rounded-lg hover:scale-105 transition-all duration-300 shadow-soft"
               title="Test backend connection"
             >
               Test
@@ -137,17 +137,17 @@ const UserList = ({ currentUser, onStartChat }) => {
           </div>
         </div>
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+          <div className="h-4 gradient-neutral rounded-lg w-3/4 mb-4"></div>
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
-              <div key={i} className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div key={i} className="flex items-center space-x-3 p-3 glass-morphism rounded-xl">
+                <div className="w-10 h-10 gradient-neutral rounded-full"></div>
+                <div className="h-4 gradient-neutral rounded-lg w-1/2"></div>
               </div>
             ))}
           </div>
         </div>
-        <div className="mt-4 text-xs text-gray-500">
+        <div className="mt-4 text-sm text-gray-500 text-center">
           Loading users...
         </div>
       </div>
@@ -155,13 +155,15 @@ const UserList = ({ currentUser, onStartChat }) => {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">Users ({users.length})</h3>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+          Users ({users.length})
+        </h3>
         <div className="flex space-x-2">
           <button
             onClick={handleRefresh}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 text-gray-500 hover:text-white hover:bg-gradient-to-r hover:from-purple-500 hover:to-blue-500 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium"
             title="Refresh user list"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +180,7 @@ const UserList = ({ currentUser, onStartChat }) => {
                 websocketService.socket.emit('get_all_users');
               }
             }}
-            className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+            className="px-3 py-1 text-xs text-white gradient-success rounded-lg hover:scale-105 transition-all duration-300 shadow-soft"
             title="Debug state"
           >
             Debug
@@ -187,37 +189,38 @@ const UserList = ({ currentUser, onStartChat }) => {
       </div>
 
       {users.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="text-center py-12">
+          <div className="w-16 h-16 gradient-neutral rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-soft">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
             </svg>
           </div>
-          <p className="text-sm font-medium">No other users found</p>
-          <p className="text-xs mt-1">Click refresh to load users or create more accounts</p>
+          <p className="text-base font-semibold text-gray-700 mb-2">No other users found</p>
+          <p className="text-sm text-gray-500">Click refresh to load users or create more accounts</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {users.map(user => (
             <div
               key={user.id}
               onClick={() => handleUserClick(user)}
-              className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+              className="flex items-center space-x-4 p-4 glass-morphism rounded-xl cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-medium"
             >
               <div className="relative">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center text-white text-base font-semibold shadow-soft">
                   {(user.display_name || user.name || user.username || user.email || 'U').charAt(0).toUpperCase()}
                 </div>
                 {user.is_online && (
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 gradient-success rounded-full border-2 border-white shadow-soft"></div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-base font-semibold text-gray-900 truncate">
                   {user.display_name || user.name || user.username || user.email}
                 </p>
-                <p className="text-xs text-gray-500">
-                  {user.is_online ? 'Online' : 'Offline'}
+                <p className="text-sm text-gray-500 flex items-center space-x-1">
+                  <span className={`w-2 h-2 rounded-full ${user.is_online ? 'bg-green-400' : 'bg-gray-400'}`}></span>
+                  <span>{user.is_online ? 'Online' : 'Offline'}</span>
                 </p>
               </div>
             </div>
