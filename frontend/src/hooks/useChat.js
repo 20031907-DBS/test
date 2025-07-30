@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import websocketService from '../services/websocket';
 import encryptionManager from '../services/encryptionManager';
+import encryptionService from '../services/encryptionService';
 
 /**
  * chat project with end-to-end encryption
@@ -20,30 +21,82 @@ export const useChat = (userId, token) => {
     // Handle incoming messages
     const handleMessage = useCallback(async (messageData) => {
         console.log('handleMessage: Processing message:', messageData);
-        
+
         let messageText;
         let isEncrypted = false;
-        
+        let encryptionError = null;
+        let signatureValid = true;
+        let decryptionErrorType = null;
+
         try {
-            // Try to decrypt message if it's encrypted
-            messageText = await encryptionManager.decryptMessage(messageData);
-            isEncrypted = messageData.is_encrypted || false;
-            console.log('handleMessage: Message decrypted successfully');
+            if (messageData.is_encrypted) {
+                isEncrypted = true;
+                
+                // Use the new EncryptionService for better error handling and signature verification
+                try {
+                    messageText = await encryptionService.decryptMessage(messageData, messageData.sender_id);
+                    console.log('handleMessage: Message decrypted successfully with signature verification');
+                } catch (decryptError) {
+                    console.error('EncryptionService decryption failed:', decryptError);
+                    
+                    // Handle specific decryption error types
+                    if (decryptError.type === 'signature_verification_failed') {
+                        signatureValid = false;
+                        decryptionErrorType = 'signature_failed';
+                        // Still try to decrypt the message content without signature verification
+                        try {
+                            messageText = await encryptionService.decryptMessageWithoutSignature(messageData);
+                            encryptionError = 'Message authenticity could not be verified';
+                        } catch (contentDecryptError) {
+                            messageText = '[Unable to decrypt message]';
+                            encryptionError = 'Failed to decrypt message content';
+                            decryptionErrorType = 'decrypt_failed';
+                        }
+                    } else if (decryptError.type === 'decryption_failed') {
+                        messageText = '[Unable to decrypt message]';
+                        encryptionError = decryptError.userFriendlyMessage || 'Unable to decrypt this message';
+                        decryptionErrorType = 'decrypt_failed';
+                    } else {
+                        // Try fallback to old encryptionManager
+                        try {
+                            messageText = await encryptionManager.decryptMessage(messageData);
+                            console.log('handleMessage: Fallback decryption successful');
+                        } catch (fallbackError) {
+                            console.error('Fallback decryption also failed:', fallbackError);
+                            messageText = '[Unable to decrypt message]';
+                            encryptionError = 'Unable to decrypt this message';
+                            decryptionErrorType = 'decrypt_failed';
+                        }
+                    }
+                }
+            } else {
+                // Plain text message
+                messageText = messageData.content;
+                isEncrypted = false;
+            }
+
+            console.log('handleMessage: Message processed successfully');
         } catch (error) {
-            console.error('Error decrypting message:', error);
-            // Fallback to original content
-            messageText = messageData.content || '[Error decrypting message]';
-            isEncrypted = false;
+            console.error('Error processing message:', error);
+            // Fallback to original content with error indication
+            messageText = messageData.content || '[Error processing message]';
+            isEncrypted = messageData.is_encrypted || false;
+            encryptionError = 'Message processing error';
+            decryptionErrorType = 'processing_error';
         }
-        
+
         const newMessage = {
             id: messageData.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             text: messageText,
             sender: messageData.sender_id === userId ? 'me' : 'other',
+            senderName: messageData.sender_name || 'Unknown User',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isEncrypted: isEncrypted
+            isEncrypted: isEncrypted,
+            encryptionError: encryptionError,
+            signatureValid: signatureValid,
+            decryptionErrorType: decryptionErrorType
         };
-        
+
         console.log('handleMessage: Adding message to state:', newMessage);
         setMessages(prev => {
             // Check if message already exists to prevent duplicates
@@ -60,7 +113,7 @@ export const useChat = (userId, token) => {
     const handleConnectionStatus = useCallback((status) => {
         setIsConnected(status.connected);
         setConnectionError(status.error || null);
-        
+
         // Update pending messages count
         if (status.connected) {
             setPendingMessagesCount(0);
@@ -77,12 +130,12 @@ export const useChat = (userId, token) => {
     // Handle errors
     const handleError = useCallback((errorData) => {
         setLastError(errorData);
-        
+
         // Update pending messages count for send errors
         if (errorData.type === 'send_message') {
             setPendingMessagesCount(websocketService.getPendingMessagesCount());
         }
-        
+
         // Auto-clear error after 5 seconds
         setTimeout(() => {
             setLastError(null);
@@ -93,7 +146,7 @@ export const useChat = (userId, token) => {
     const handleTyping = useCallback((typingData) => {
         // Handle typing indicators for any room (we'll filter by room in the component)
         setTypingUsers(prev => {
-            const filtered = prev.filter(user => 
+            const filtered = prev.filter(user =>
                 user.user_id !== typingData.user_id || user.room_id !== typingData.room_id
             );
             if (typingData.is_typing) {
@@ -141,7 +194,7 @@ export const useChat = (userId, token) => {
         }
 
         console.log('useChat: Setting up WebSocket callbacks');
-        
+
         // Remove any existing callbacks first to prevent duplicates
         websocketService.removeMessageCallback(handleMessage);
         websocketService.removeConnectionCallback(handleConnectionStatus);
@@ -149,7 +202,7 @@ export const useChat = (userId, token) => {
         websocketService.removeErrorCallback(handleError);
         websocketService.removeTypingCallback(handleTyping);
         websocketService.removePresenceCallback(handlePresence);
-        
+
         // Register callbacks
         websocketService.onMessage(handleMessage);
         websocketService.onConnectionStatus(handleConnectionStatus);
@@ -184,7 +237,7 @@ export const useChat = (userId, token) => {
 
         // Use the WebSocket service to start a direct message
         const roomId = websocketService.startDirectMessage(targetUserId);
-        
+
         if (roomId) {
             console.log('useChat: Direct message room created:', roomId);
             return roomId;
@@ -195,23 +248,43 @@ export const useChat = (userId, token) => {
     };
 
     // Send message function (requires roomId to be passed)
-    const sendMessage = async (roomId, messageContent) => {
+    const sendMessage = async (roomId, messageContent, encryptedMessageData = null) => {
         if (!messageContent.trim() || !roomId) return;
 
         try {
-            // Encrypt message if encryption is available
-            const messageData = await encryptionManager.encryptMessage(messageContent.trim(), roomId);
-            
+            let messageData;
+
+            if (encryptedMessageData) {
+                // Use pre-encrypted message data from ChatMain
+                messageData = {
+                    content: encryptedMessageData.content,
+                    encrypted_aes_key: encryptedMessageData.encrypted_aes_key,
+                    iv: encryptedMessageData.iv,
+                    signature: encryptedMessageData.signature,
+                    is_encrypted: encryptedMessageData.is_encrypted
+                };
+            } else {
+                // Fallback to encryptionManager for backward compatibility
+                const fallbackData = await encryptionManager.encryptMessage(messageContent.trim(), roomId);
+                messageData = {
+                    content: fallbackData.content,
+                    encrypted_aes_key: fallbackData.encrypted_aes_key,
+                    iv: fallbackData.iv,
+                    is_encrypted: fallbackData.is_encrypted
+                };
+            }
+
             // Send encrypted or plain message
             const result = websocketService.sendMessage(roomId, messageData.content, {
                 encrypted_aes_key: messageData.encrypted_aes_key,
                 iv: messageData.iv,
+                signature: messageData.signature,
                 is_encrypted: messageData.is_encrypted
             });
-            
+
             // Update pending messages count
             setPendingMessagesCount(websocketService.getPendingMessagesCount());
-            
+
             return result;
         } catch (error) {
             console.error('Failed to send message:', error);

@@ -45,7 +45,7 @@ export default function MockAuth({ onLogin }) {
               <User className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-blue-700">
                 <p className="font-medium">Demo Mode</p>
-                <p>You'll be logged in as a demo user to test all features.</p>
+                <p>You&apos;ll be logged in as a demo user to test all features.</p>
               </div>
             </div>
           </div>

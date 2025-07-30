@@ -80,18 +80,6 @@ function ChatInterface({ roomId }) {
     currentUser?.accessToken
   );
 
-  // Show loading state if user data is not available
-  if (!currentUser?.uid || !currentUser?.accessToken) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading chat...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Handle responsive design
   useEffect(() => {
     const checkMobile = () => {
@@ -207,6 +195,18 @@ function ChatInterface({ roomId }) {
     console.log('Online Users:', onlineUsers);
   };
 
+  // Show loading state if user data is not available
+  if (!currentUser?.uid || !currentUser?.accessToken) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading chat...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-white">
       {/* Sidebar */}
@@ -315,7 +315,7 @@ function ChatInterface({ roomId }) {
             currentRoom={currentRoom}
             selectedRoomId={selectedRoomId}
             selectedUser={selectedUser}
-            sendMessage={(message) => sendWebSocketMessage(selectedRoomId, message)}
+            sendMessage={(message, encryptedData) => sendWebSocketMessage(selectedRoomId, message, encryptedData)}
             connectionError={connectionError}
             lastError={lastError}
             pendingMessagesCount={pendingMessagesCount}

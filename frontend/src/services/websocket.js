@@ -124,6 +124,32 @@ class WebSocketService {
   }
 
   /**
+   * Validate encrypted message data format
+   */
+  validateEncryptedMessageData(encryptionData) {
+    if (!encryptionData.is_encrypted) {
+      return null; // No validation needed for unencrypted messages
+    }
+
+    const errors = [];
+
+    if (!encryptionData.encrypted_aes_key) {
+      errors.push('Encrypted AES key is required for encrypted messages');
+    }
+
+    if (!encryptionData.iv) {
+      errors.push('Initialization vector (IV) is required for encrypted messages');
+    }
+
+    // Signature is optional but should be validated if present
+    if (encryptionData.signature && typeof encryptionData.signature !== 'string') {
+      errors.push('Message signature must be a string');
+    }
+
+    return errors.length > 0 ? errors[0] : null;
+  }
+
+  /**
    * Send a message to a room
    */
   sendMessage(roomId, message, encryptionData = {}) {
@@ -144,6 +170,12 @@ class WebSocketService {
         throw new AppError(messageErrors[0], ErrorCodes.VALIDATION_ERROR);
       }
 
+      // Validate encryption data if message is encrypted
+      const encryptionError = this.validateEncryptedMessageData(encryptionData);
+      if (encryptionError) {
+        throw new AppError(encryptionError, ErrorCodes.VALIDATION_ERROR);
+      }
+
       // Sanitize message content
       const sanitizedMessage = sanitizeMessage(message);
 
@@ -155,8 +187,9 @@ class WebSocketService {
         id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Unique ID for tracking
         timestamp: new Date().toISOString(),
         // Encryption fields
-        encrypted_aes_key: encryptionData.encrypted_aes_key,
-        iv: encryptionData.iv,
+        encrypted_aes_key: encryptionData.encrypted_aes_key || null,
+        iv: encryptionData.iv || null,
+        signature: encryptionData.signature || null,
         is_encrypted: encryptionData.is_encrypted || false
       };
 

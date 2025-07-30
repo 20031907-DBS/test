@@ -152,7 +152,13 @@ class EncryptionService {
 
       // Verify signature if available
       if (encryptedData.signature && senderUserId) {
-        await this._verifyMessageSignature(decryptedMessage, encryptedData.signature, senderUserId);
+        const signatureValid = await this._verifyMessageSignature(decryptedMessage, encryptedData.signature, senderUserId);
+        if (!signatureValid) {
+          // Throw specific signature verification error
+          const sigError = new Error('Message signature verification failed');
+          sigError.type = EncryptionErrorTypes.SIGNATURE_VERIFICATION_FAILED;
+          throw sigError;
+        }
       }
 
       this.lastError = null;
@@ -160,6 +166,57 @@ class EncryptionService {
 
     } catch (error) {
       console.error('Message decryption failed:', error);
+      
+      // Preserve signature verification error type
+      if (error.type === EncryptionErrorTypes.SIGNATURE_VERIFICATION_FAILED) {
+        this.lastError = this._createErrorInfo(EncryptionErrorTypes.SIGNATURE_VERIFICATION_FAILED, error);
+      } else {
+        this.lastError = this._createErrorInfo(EncryptionErrorTypes.DECRYPTION_FAILED, error);
+      }
+      
+      throw this.lastError;
+    }
+  }
+
+  /**
+   * Decrypt a message without signature verification (for fallback scenarios)
+   * @param {EncryptedMessageData} encryptedData - Encrypted message data
+   * @returns {Promise<string>} Decrypted plain text message
+   */
+  async decryptMessageWithoutSignature(encryptedData) {
+    try {
+      if (!encryptedData) {
+        throw new Error('No encrypted data provided');
+      }
+
+      // If message is not encrypted, return as-is
+      if (!encryptedData.is_encrypted) {
+        return encryptedData.content;
+      }
+
+      if (!this.isEncryptionAvailable()) {
+        throw new Error('Encryption not available for decryption');
+      }
+
+      // Decrypt AES key with our private key
+      const myPrivateKey = await this._getMyPrivateKey();
+      const aesKey = await CryptoService.decryptWithRSA(
+        encryptedData.encrypted_aes_key, 
+        myPrivateKey
+      );
+      
+      // Decrypt message content with AES key
+      const decryptedMessage = await CryptoService.decryptWithAES(
+        encryptedData.content,
+        encryptedData.iv,
+        aesKey
+      );
+
+      this.lastError = null;
+      return decryptedMessage;
+
+    } catch (error) {
+      console.error('Message decryption (without signature) failed:', error);
       this.lastError = this._createErrorInfo(EncryptionErrorTypes.DECRYPTION_FAILED, error);
       throw this.lastError;
     }

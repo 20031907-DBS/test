@@ -1,13 +1,15 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Phone, Video, MoreVertical, Send, Paperclip, Smile, Check, CheckCheck, Clock, AlertCircle, Wifi, WifiOff, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Phone, Video, MoreVertical, Send, Paperclip, Smile, Check, CheckCheck, Clock, AlertCircle, Wifi, WifiOff, MessageCircle, Lock, LockOpen, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
+import encryptionService from '../services/encryptionService';
 
 export default function ChatMain({
   messages,
   isConnected,
   currentRoom,
   selectedRoomId,
+  selectedUser,
   sendMessage,
   connectionError,
   lastError,
@@ -24,6 +26,8 @@ export default function ChatMain({
 }) {
   const [messageInput, setMessageInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [encryptionError, setEncryptionError] = useState(null);
+  const [isEncrypting, setIsEncrypting] = useState(false);
   const messageEndRef = useRef(null);
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -45,12 +49,41 @@ export default function ChatMain({
   const handleSendMessage = async () => {
     if (messageInput.trim() && !isSending) {
       setIsSending(true);
+      setIsEncrypting(true);
+      setEncryptionError(null);
+      
       try {
-        const result = await sendMessage(messageInput);
+        // Check if encryption is available and we have a recipient
+        const canEncrypt = encryptionService.isEncryptionAvailable() && selectedUser?.id;
+        let messageData = null;
+        
+        if (canEncrypt) {
+          try {
+            // Encrypt the message for the recipient
+            messageData = await encryptionService.encryptMessage(messageInput.trim(), selectedUser.id.toString());
+            console.log('Message encrypted successfully');
+          } catch (encryptError) {
+            console.error('Encryption failed:', encryptError);
+            setEncryptionError(encryptError.userFriendlyMessage || 'Failed to encrypt message');
+            
+            // Don't send the message if encryption fails
+            return;
+          }
+        }
+        
+        setIsEncrypting(false);
+        
+        // Send the message (encrypted or plain)
+        const result = await sendMessage(messageInput, messageData);
         if (result?.success || result?.queued) {
           setMessageInput('');
+          setEncryptionError(null);
         }
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        setEncryptionError('Failed to send message');
       } finally {
+        setIsEncrypting(false);
         // Add a small delay to prevent double-sending
         setTimeout(() => {
           setIsSending(false);
@@ -134,6 +167,28 @@ export default function ChatMain({
       'random': '🎲'
     };
     return roomAvatars[selectedRoomId] || '💬';
+  };
+
+  const getEncryptionStatusText = (message) => {
+    if (!message.isEncrypted) {
+      return 'Not encrypted';
+    }
+    
+    if (message.encryptionError) {
+      if (message.decryptionErrorType === 'signature_failed') {
+        return 'Encrypted (signature verification failed)';
+      } else if (message.decryptionErrorType === 'decrypt_failed') {
+        return 'Encrypted (decryption failed)';
+      } else {
+        return 'Encrypted (error)';
+      }
+    }
+    
+    if (message.signatureValid) {
+      return 'Encrypted and verified';
+    } else {
+      return 'Encrypted (signature not verified)';
+    }
   };
 
   if (!selectedRoomId) {
@@ -307,15 +362,126 @@ export default function ChatMain({
                     {message.text}
                   </div>
                   
+                  {/* Encryption error message display */}
+                  {message.encryptionError && (
+                    <div className={clsx(
+                      "text-xs mt-1 px-2 py-1 rounded",
+                      message.decryptionErrorType === 'signature_failed'
+                        ? isOwn 
+                          ? "bg-yellow-100 text-yellow-800 border border-yellow-200" 
+                          : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                        : isOwn 
+                          ? "bg-red-100 text-red-800 border border-red-200" 
+                          : "bg-red-50 text-red-700 border border-red-200"
+                    )}>
+                      <div className="flex items-center space-x-1">
+                        {message.decryptionErrorType === 'signature_failed' ? (
+                          <AlertTriangle className="w-3 h-3 text-yellow-600" />
+                        ) : (
+                          <AlertTriangle className="w-3 h-3 text-red-600" />
+                        )}
+                        <span>{message.encryptionError}</span>
+                      </div>
+                      
+                      {/* Additional context for different error types */}
+                      {message.decryptionErrorType === 'signature_failed' && (
+                        <div className="mt-1 text-xs opacity-75">
+                          The message was decrypted but the sender&apos;s identity could not be verified.
+                        </div>
+                      )}
+                      
+                      {message.decryptionErrorType === 'decrypt_failed' && (
+                        <div className="mt-1 text-xs opacity-75">
+                          This message may be corrupted or sent with incompatible encryption.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   <div className={clsx(
-                    "flex items-center justify-end space-x-1 mt-1 text-xs",
+                    "flex items-center justify-between mt-1 text-xs",
                     isOwn ? "text-blue-100" : "text-gray-500"
                   )}>
-                    <span>{message.timestamp}</span>
-                    {getMessageStatus(message)}
-                    {message.isEncrypted && (
-                      <span className="text-xs">🔒</span>
-                    )}
+                    <div className="flex items-center space-x-1">
+                      {/* Encryption status text */}
+                      <span className={clsx(
+                        "text-xs opacity-75",
+                        message.encryptionError && message.decryptionErrorType === 'signature_failed' 
+                          ? isOwn ? "text-yellow-200" : "text-yellow-600"
+                          : message.encryptionError 
+                            ? isOwn ? "text-red-200" : "text-red-500"
+                            : message.isEncrypted 
+                              ? isOwn ? "text-green-200" : "text-green-600"
+                              : isOwn ? "text-gray-300" : "text-gray-400"
+                      )}>
+                        {getEncryptionStatusText(message)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-1">
+                      <span>{message.timestamp}</span>
+                      {getMessageStatus(message)}
+                      
+                      {/* Encryption status indicators */}
+                      {message.isEncrypted && !message.encryptionError && message.signatureValid && (
+                        <div className="flex items-center space-x-1">
+                          <Lock className={clsx(
+                            "w-3 h-3",
+                            isOwn ? "text-green-200" : "text-green-600"
+                          )} title="End-to-end encrypted and signature verified" />
+                          <div className={clsx(
+                            "w-1 h-1 rounded-full",
+                            isOwn ? "bg-green-200" : "bg-green-600"
+                          )} title="Verified sender" />
+                        </div>
+                      )}
+                      
+                      {message.isEncrypted && !message.encryptionError && !message.signatureValid && (
+                        <div className="flex items-center space-x-1">
+                          <Lock className={clsx(
+                            "w-3 h-3",
+                            isOwn ? "text-blue-200" : "text-green-600"
+                          )} title="End-to-end encrypted" />
+                          <AlertTriangle className={clsx(
+                            "w-3 h-3",
+                            isOwn ? "text-yellow-200" : "text-yellow-500"
+                          )} title="Message signature could not be verified - sender authenticity unknown" />
+                        </div>
+                      )}
+                      
+                      {message.encryptionError && message.decryptionErrorType === 'decrypt_failed' && (
+                        <div className="flex items-center space-x-1">
+                          <LockOpen className={clsx(
+                            "w-3 h-3",
+                            isOwn ? "text-red-200" : "text-red-500"
+                          )} title="Failed to decrypt message" />
+                          <AlertTriangle className={clsx(
+                            "w-3 h-3",
+                            isOwn ? "text-red-200" : "text-red-500"
+                          )} title="Decryption error" />
+                        </div>
+                      )}
+                      
+                      {message.encryptionError && message.decryptionErrorType === 'signature_failed' && (
+                        <div className="flex items-center space-x-1">
+                          <Lock className={clsx(
+                            "w-3 h-3",
+                            isOwn ? "text-blue-200" : "text-green-600"
+                          )} title="Message decrypted successfully" />
+                          <AlertTriangle className={clsx(
+                            "w-3 h-3",
+                            isOwn ? "text-yellow-200" : "text-yellow-500"
+                          )} title="Signature verification failed - sender authenticity could not be verified" />
+                        </div>
+                      )}
+                      
+                      {!message.isEncrypted && (
+                        <LockOpen className={clsx(
+                          "w-3 h-3",
+                          isOwn ? "text-gray-300" : "text-gray-400"
+                        )} title="Message not encrypted" />
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -349,6 +515,52 @@ export default function ChatMain({
 
       {/* Message Input */}
       <div className="border-t border-gray-200 bg-white p-4">
+        {/* Encryption Status Bar */}
+        {encryptionService.isEncryptionAvailable() && selectedUser && (
+          <div className="mb-3 flex items-center justify-between text-xs bg-green-50 border border-green-200 rounded px-3 py-2">
+            <div className="flex items-center space-x-2">
+              <Lock className="w-3 h-3 text-green-600" />
+              <span className="text-green-700 font-medium">End-to-end encryption enabled</span>
+            </div>
+            <div className="text-green-600">
+              Messages are encrypted for {selectedUser.display_name || selectedUser.name || selectedUser.username}
+            </div>
+          </div>
+        )}
+        
+        {!encryptionService.isEncryptionAvailable() && selectedUser && (
+          <div className="mb-3 flex items-center justify-between text-xs bg-yellow-50 border border-yellow-200 rounded px-3 py-2">
+            <div className="flex items-center space-x-2">
+              <LockOpen className="w-3 h-3 text-yellow-600" />
+              <span className="text-yellow-700 font-medium">Encryption not available</span>
+            </div>
+            <div className="text-yellow-600">
+              Messages will be sent unencrypted
+            </div>
+          </div>
+        )}
+        
+        {!selectedUser && (
+          <div className="mb-3 flex items-center space-x-2 text-xs bg-gray-50 border border-gray-200 rounded px-3 py-2">
+            <MessageCircle className="w-3 h-3 text-gray-500" />
+            <span className="text-gray-600">Select a user to enable encryption</span>
+          </div>
+        )}
+        
+        {/* Encryption Error Display */}
+        {encryptionError && (
+          <div className="mb-3 flex items-center space-x-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+            <AlertTriangle className="w-3 h-3" />
+            <span>{encryptionError}</span>
+            <button
+              onClick={() => setEncryptionError(null)}
+              className="ml-auto text-red-400 hover:text-red-600"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        
         <div className="flex items-end space-x-3">
           <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
             <Paperclip className="w-5 h-5" />
@@ -361,17 +573,27 @@ export default function ChatMain({
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder={isConnected ? "Type a message..." : "Connecting..."}
-              disabled={!isConnected}
+              disabled={!isConnected || isEncrypting}
               className={clsx(
                 "w-full px-4 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
                 {
-                  "bg-gray-100 opacity-70": !isConnected,
-                  "bg-white": isConnected
+                  "bg-gray-100 opacity-70": !isConnected || isEncrypting,
+                  "bg-white": isConnected && !isEncrypting
                 }
               )}
               rows={1}
               style={{ minHeight: '40px', maxHeight: '120px' }}
             />
+            
+            {/* Encryption indicator in input */}
+            {isEncrypting && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="flex items-center space-x-1 text-xs text-blue-600">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
+                  <span>Encrypting...</span>
+                </div>
+              </div>
+            )}
           </div>
           
           <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
@@ -380,16 +602,24 @@ export default function ChatMain({
           
           <button
             onClick={handleSendMessage}
-            disabled={!messageInput.trim() || isSending}
+            disabled={!messageInput.trim() || isSending || isEncrypting}
             className={clsx(
-              "p-2 rounded-full transition-colors",
-              messageInput.trim() && isConnected && !isSending
+              "p-2 rounded-full transition-colors relative",
+              messageInput.trim() && isConnected && !isSending && !isEncrypting
                 ? "bg-blue-600 text-white hover:bg-blue-700"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             )}
-            title={!isConnected ? 'Message will be queued and sent when reconnected' : 'Send message'}
+            title={
+              isEncrypting ? 'Encrypting message...' :
+              !isConnected ? 'Message will be queued and sent when reconnected' : 
+              'Send message'
+            }
           >
-            <Send className="w-5 h-5" />
+            {isEncrypting ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <Send className="w-5 h-5" />
+            )}
           </button>
         </div>
         
