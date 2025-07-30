@@ -28,44 +28,59 @@ export const useChat = (userId, token) => {
         let signatureValid = true;
         let decryptionErrorType = null;
 
+        // Check if this is our own message (sender)
+        const isOwnMessage = messageData.sender_id === userId;
+
         try {
             if (messageData.is_encrypted) {
                 isEncrypted = true;
                 
-                // Use the new EncryptionService for better error handling and signature verification
-                try {
-                    messageText = await encryptionService.decryptMessage(messageData, messageData.sender_id);
-                    console.log('handleMessage: Message decrypted successfully with signature verification');
-                } catch (decryptError) {
-                    console.error('EncryptionService decryption failed:', decryptError);
+                if (isOwnMessage) {
+                    // ✅ CRITICAL FIX: Don't decrypt our own messages!
+                    // We don't have the recipient's private key, so decryption will always fail
+                    console.log('handleMessage: This is our own encrypted message - skipping decryption');
+                    messageText = '[Message sent encrypted]'; // Placeholder for sender
+                    signatureValid = true;
+                    encryptionError = null;
+                } else {
+                    // Only decrypt messages from other users
+                    console.log('handleMessage: Decrypting message from other user:', messageData.sender_id);
                     
-                    // Handle specific decryption error types
-                    if (decryptError.type === 'signature_verification_failed') {
-                        signatureValid = false;
-                        decryptionErrorType = 'signature_failed';
-                        // Still try to decrypt the message content without signature verification
-                        try {
-                            messageText = await encryptionService.decryptMessageWithoutSignature(messageData);
-                            encryptionError = 'Message authenticity could not be verified';
-                        } catch (contentDecryptError) {
+                    // Use the new EncryptionService for better error handling and signature verification
+                    try {
+                        messageText = await encryptionService.decryptMessage(messageData, messageData.sender_id);
+                        console.log('handleMessage: Message decrypted successfully with signature verification');
+                    } catch (decryptError) {
+                        console.error('EncryptionService decryption failed:', decryptError);
+                        
+                        // Handle specific decryption error types
+                        if (decryptError.type === 'signature_verification_failed') {
+                            signatureValid = false;
+                            decryptionErrorType = 'signature_failed';
+                            // Still try to decrypt the message content without signature verification
+                            try {
+                                messageText = await encryptionService.decryptMessageWithoutSignature(messageData);
+                                encryptionError = 'Message authenticity could not be verified';
+                            } catch (contentDecryptError) {
+                                messageText = '[Unable to decrypt message]';
+                                encryptionError = 'Failed to decrypt message content';
+                                decryptionErrorType = 'decrypt_failed';
+                            }
+                        } else if (decryptError.type === 'decryption_failed') {
                             messageText = '[Unable to decrypt message]';
-                            encryptionError = 'Failed to decrypt message content';
+                            encryptionError = decryptError.userFriendlyMessage || 'Unable to decrypt this message';
                             decryptionErrorType = 'decrypt_failed';
-                        }
-                    } else if (decryptError.type === 'decryption_failed') {
-                        messageText = '[Unable to decrypt message]';
-                        encryptionError = decryptError.userFriendlyMessage || 'Unable to decrypt this message';
-                        decryptionErrorType = 'decrypt_failed';
-                    } else {
-                        // Try fallback to old encryptionManager
-                        try {
-                            messageText = await encryptionManager.decryptMessage(messageData);
-                            console.log('handleMessage: Fallback decryption successful');
-                        } catch (fallbackError) {
-                            console.error('Fallback decryption also failed:', fallbackError);
-                            messageText = '[Unable to decrypt message]';
-                            encryptionError = 'Unable to decrypt this message';
-                            decryptionErrorType = 'decrypt_failed';
+                        } else {
+                            // Try fallback to old encryptionManager
+                            try {
+                                messageText = await encryptionManager.decryptMessage(messageData);
+                                console.log('handleMessage: Fallback decryption successful');
+                            } catch (fallbackError) {
+                                console.error('Fallback decryption also failed:', fallbackError);
+                                messageText = '[Unable to decrypt message]';
+                                encryptionError = 'Unable to decrypt this message';
+                                decryptionErrorType = 'decrypt_failed';
+                            }
                         }
                     }
                 }
