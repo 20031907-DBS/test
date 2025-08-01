@@ -11,9 +11,9 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 #CORS(app, supports_credentials=True)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins=["http://54.195.27.35"])
 #socketio = SocketIO(app, cors_allowed_origins="*")
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="http://54.195.27.35")
 
 # Initialize extensions
 db.init_app(app)
